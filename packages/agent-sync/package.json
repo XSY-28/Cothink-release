@@ -1,0 +1,22 @@
+{
+  "name": "@cothink/agent-sync",
+  "version": "0.1.1",
+  "type": "module",
+  "description": "Independent local collaboration versions with scoped drafts and isolated checks",
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "exports": "./src/index.js",
+  "bin": {
+    "agent-sync": "./src/stdio.js"
+  },
+  "files": [
+    "src/",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "license": "MIT"
+}

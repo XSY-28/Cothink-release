@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "upstream": {
+    "repository": "earendil-works/pi",
+    "tag": "v1.0.0",
+    "archiveUrl": "https://codeload.github.com/earendil-works/pi/tar.gz/refs/tags/v1.0.0",
+    "archiveSha256": "f6860e67524d24ad9f851fe0d19b184ef81c7d2e7df1bf39c6573655bd11398c"
+  },
+  "catalog": {
+    "package": "@earendil-works/pi-ai@1.0.0",
+    "sha256": "f39b99c29b8598f175b10840e5d2a81983e7c0ce5cae4d7df83a1007447d2c2b",
+    "validatedBy": "upstream check:model-data"
+  },
+  "selectedFiles": {
+    "packages/coding-agent/src/core/sdk.ts": "1fb8a84ab4dfab28344932b430c8d4abcd234a1c35ae9aebc3049269a813312d",
+    "packages/coding-agent/src/core/model-runtime.ts": "de28a51492788e7f5f4d6f20a57fa8b08e32fd9e766a365211b54a3f3959a177",
+    "packages/coding-agent/src/core/agent-session.ts": "11ce7b78ee9d4235f2cdc80632332c93935ad23d7e5d68fe1aa5b155e1a297c0",
+    "packages/coding-agent/src/modes/interactive/interactive-mode.ts": "2d598d2ced8b3188edc21aa23d791c2c38ccac1f8683144cd1b734d201da8729",
+    "packages/coding-agent/src/modes/interactive/tui-renderer.ts": "a5b0a847dbac31cceac6e3d6d68aaf46404ceca7ad11e716a2386b68f7a249aa",
+    "packages/ai/src/api/simple-options.ts": "8bb50ff92c1759434ead59d1b4111826b6be47d13f744b8cc3b775c684536d46",
+    "packages/agent/src/agent.ts": "7024a3145a6ebc951a0f030164adb1dfb12d33d6e0dbbac15ef0efda49c87457"
+  },
+  "patchAllowlist": [
+    "packages/coding-agent/src/modes/interactive/interactive-mode.ts",
+    "packages/coding-agent/src/modes/interactive/tui-renderer.ts",
+    "packages/coding-agent/src/modes/interactive/components/login-dialog.ts",
+    "packages/tui/src/components/editor.ts",
+    "packages/coding-agent/src/index.ts"
+  ],
+  "publicApiInsteadOfPatch": {
+    "requestPolicy": "wrap ModelRuntime stream/streamSimple, complete delegates once; provider onPayload is awaited before send",
+    "limits": "provider onPayload + timeoutMs=0/maxRetries=0; required output fields explicit",
+    "persistence": "Agent awaits subscribers and SessionManager writes; errors propagate"
+  },
+  "build": "stock-build-with-catalog.log",
+  "realGenerations": 0,
+  "patchFiles": {
+    "packages/coding-agent/src/modes/interactive/interactive-mode.ts": {
+      "original": "2d598d2ced8b3188edc21aa23d791c2c38ccac1f8683144cd1b734d201da8729",
+      "patched": "d68458d7308d04a21c6854bb39f9b4fce3050659bc56c31170845269349586a5"
+    },
+    "packages/coding-agent/src/modes/interactive/tui-renderer.ts": {
+      "original": "a5b0a847dbac31cceac6e3d6d68aaf46404ceca7ad11e716a2386b68f7a249aa",
+      "patched": "5f41afaa1a128a5bee6aa2e6d53f61471e6e22fb5b8be08b27df3ef31b0daa5f"
+    },
+    "packages/coding-agent/src/modes/interactive/components/login-dialog.ts": {
+      "original": "37608848ca7b72707437aed9627a612eadf570c57a54b1c86972c3532918298c",
+      "patched": "4c7584972c24a7c35ad9fedaed31d4844310bc65a58a0c4e894160058c8c0371"
+    },
+    "packages/tui/src/components/editor.ts": {
+      "original": "30a47fd49042579be7b85262677df62d4ff37a8f9a3a0e6c41ce3cf1d402b9c3",
+      "patched": "4ec25832b429e112abc28d213c675a116b81c695a32e94d01a4be158212ab686"
+    },
+    "packages/coding-agent/src/index.ts": {
+      "original": "53f1276c704d1d823d37f2c0b1cfa60daae19b1c220e78d028b863a15f304078",
+      "patched": "fc27dcb2a153baca14f22aa3f2d68c8068f8824b3258bd264f64c85ab6cc12de"
+    }
+  }
+}

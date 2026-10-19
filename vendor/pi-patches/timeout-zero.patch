@@ -1,0 +1,22 @@
+--- a/openai/src/client.ts
++++ b/openai/src/client.ts
+@@ -1619,7 +1619,7 @@
+     const cleanup =
+       signal && !composed ? addRequestAbortListener(signal, abort, controller.signal) : undefined;
+ 
+-    const timeout = setTimeout(abort, ms);
++    const timeout = ms === 0 ? undefined : setTimeout(abort, ms);
+ 
+     const isReadableBody =
+       ((globalThis as any).ReadableStream && options.body instanceof (globalThis as any).ReadableStream) ||
+--- a/@anthropic-ai/sdk/src/client.ts
++++ b/@anthropic-ai/sdk/src/client.ts
+@@ -1365,7 +1365,7 @@
+     // once), and each inner-fetch invocation gets its own `ms` timer.
+     const baseFetch = this.fetch;
+     const timedFetch: Fetch = async (innerUrl, innerInit) => {
+-      const timeout = setTimeout(abort, ms);
++      const timeout = ms === 0 ? undefined : setTimeout(abort, ms);
+       try {
+         return await baseFetch.call(undefined, innerUrl, innerInit);
+       } finally {

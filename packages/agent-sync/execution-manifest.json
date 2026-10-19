@@ -1,0 +1,27 @@
+{
+  "execution": {
+    "engine": "docker",
+    "image": "node@sha256:0e5f906573693feaa1e21057ebdcfdb5bd5021f050b2dc7c9deceb629c7da2a8",
+    "network": "none",
+    "limits": {
+      "memoryBytes": 4294967296,
+      "cpus": 2,
+      "pids": 256
+    },
+    "artifactPaths": [
+      "node_modules"
+    ]
+  },
+  "image": "node@sha256:0e5f906573693feaa1e21057ebdcfdb5bd5021f050b2dc7c9deceb629c7da2a8",
+  "imageId": "sha256:0e5f906573693feaa1e21057ebdcfdb5bd5021f050b2dc7c9deceb629c7da2a8",
+  "platform": "linux/arm64",
+  "hostPlatform": "darwin/arm64",
+  "versions": {
+    "node": "22.23.3",
+    "git": "2.39.5",
+    "bash": "5.2.15",
+    "docker": "29.8.2"
+  },
+  "dependencies": "fixed image only; no network installs or trusted project dependencies prepared",
+  "preflight": "real docker run completed 2026-10-19"
+}

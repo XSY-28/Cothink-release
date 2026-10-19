@@ -1,0 +1,399 @@
+--- a/packages/coding-agent/src/modes/interactive/interactive-mode.ts
++++ b/packages/coding-agent/src/modes/interactive/interactive-mode.ts
+@@ -420,6 +420,20 @@
+  * Options for InteractiveMode initialization.
+  */
+ export interface InteractiveModeOptions {
++ /** Optional host lifecycle and display policy. Omitted preserves stock Pi behavior. */
++ host?: {
++  submit(text: string, options?: Parameters<AgentSession["prompt"]>[1]): Promise<void>;
++  isBusy(): boolean;
++  cancel(): Promise<void> | void;
++  beforeSubmit?(text: string): Promise<boolean>;
++  beforeExit?(draft: string): Promise<boolean>;
++  afterStop?(): Promise<void> | void;
++  project?(message: AgentMessage): AgentMessage | null;
++  rebind?(session: AgentSession): Promise<void> | void;
++  showDetails?(): Promise<void> | void;
++  copySelection?(text: string): Promise<void>;
++ };
++
+ 	/** Providers that were migrated to auth.json (shows warning) */
+ 	migratedProviders?: string[];
+ 	/** Diagnostics collected before the interactive TUI was initialized. */
+@@ -604,6 +618,7 @@
+ 			this.resetExtensionUI();
+ 		});
+ 		this.runtimeHost.setRebindSession(async () => {
++			await this.options.host?.rebind?.(this.session);
+ 			await this.rebindCurrentSession({ renderBeforeBind: true });
+ 			this.themeController.applyFromSettings();
+ 		});
+@@ -615,6 +630,7 @@
+ 			terminal: options.terminal,
+ 			onRightClickPaste: this.onRightClickPaste,
+ 			fullscreenCopyOnSelect: this.settingsManager.getFullscreenCopyOnSelect(),
++			copySelection: this.options.host?.copySelection,
+ 			fullscreenWheelScrollLines: this.settingsManager.getFullscreenWheelScrollLines(),
+ 		});
+ 		this.ui = createInteractiveTuiReference(() => this.renderer);
+@@ -639,7 +655,8 @@
+ 			autocompleteMaxVisible,
+ 			embedWorkingStatus: true,
+ 		});
+-		this.editor = this.defaultEditor;
++		this.defaultEditor.preserveWhitespace = Boolean(this.options.host);
++  this.editor = this.defaultEditor;
+ 		this.editorContainer = new Container();
+ 		this.editorContainer.addChild(this.editor as Component);
+ 		this.footerDataProvider = new FooterDataProvider(this.sessionManager.getCwd());
+@@ -903,6 +920,7 @@
+ 			terminal,
+ 			onRightClickPaste: this.onRightClickPaste,
+ 			fullscreenCopyOnSelect: this.settingsManager.getFullscreenCopyOnSelect(),
++			copySelection: this.options.host?.copySelection,
+ 			fullscreenWheelScrollLines: this.settingsManager.getFullscreenWheelScrollLines(),
+ 		});
+ 		nextUi.setClearOnShrink(clearOnShrink);
+@@ -1143,7 +1161,7 @@
+ 		}
+ 
+ 		// Start version check asynchronously
+-		checkForNewPiVersion(this.version).then((newRelease) => {
++		if (!this.options.host) checkForNewPiVersion(this.version).then((newRelease) => {
+ 			if (newRelease) {
+ 				this.showNewVersionNotification(newRelease);
+ 			}
+@@ -1217,7 +1235,7 @@
+ 		// Process initial messages
+ 		if (initialMessage) {
+ 			try {
+-				await this.session.prompt(initialMessage, { images: initialImages });
++				await this.submitHostPrompt(initialMessage, { images: initialImages });
+ 			} catch (error: unknown) {
+ 				const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+ 				this.showError(errorMessage);
+@@ -1227,7 +1245,7 @@
+ 		if (initialMessages) {
+ 			for (const message of initialMessages) {
+ 				try {
+-					await this.session.prompt(message);
++					await this.submitHostPrompt(message);
+ 				} catch (error: unknown) {
+ 					const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+ 					this.showError(errorMessage);
+@@ -1239,7 +1257,7 @@
+ 		while (true) {
+ 			const userInput = await this.getUserInput();
+ 			try {
+-				await this.session.prompt(userInput);
++				await this.submitHostPrompt(userInput);
+ 			} catch (error: unknown) {
+ 				const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+ 				this.showError(errorMessage);
+@@ -1248,7 +1266,7 @@
+ 	}
+ 
+ 	private async checkForPackageUpdates(): Promise<string[]> {
+-		if (process.env.PI_OFFLINE) {
++		if (this.options.host || process.env.PI_OFFLINE) {
+ 			return [];
+ 		}
+ 
+@@ -1317,6 +1335,7 @@
+ 	 * Only shows new entries since last seen version, skips for resumed sessions.
+ 	 */
+ 	private getChangelogForDisplay(): string | undefined {
++		if (this.options.host) return undefined;
+ 		// Skip changelog for resumed/continued sessions (already have messages)
+ 		if (this.session.state.messages.length > 0) {
+ 			return undefined;
+@@ -3009,6 +3028,7 @@
+ 		// Set up handlers on defaultEditor - they use this.editor for text access
+ 		// so they work correctly regardless of which editor is active
+ 		this.defaultEditor.onEscape = () => {
++   if (this.options.host?.isBusy()) { void this.options.host.cancel(); return; }
+ 			if (this.session.isStreaming) {
+ 				this.restoreQueuedMessagesToEditor({ abort: true });
+ 			} else if (this.session.isBashRunning) {
+@@ -3047,7 +3067,7 @@
+ 		// Global debug handler on TUI (works regardless of focus)
+ 		this.ui.onDebug = () => this.handleDebugCommand();
+ 		this.defaultEditor.onAction("app.model.select", () => this.showModelSelector());
+-		this.defaultEditor.onAction("app.tools.expand", () => this.toggleToolOutputExpansion());
++		this.defaultEditor.onAction("app.tools.expand", () => this.options.host?.showDetails ? void this.options.host.showDetails() : this.toggleToolOutputExpansion());
+ 		this.defaultEditor.onAction("app.thinking.toggle", () => this.toggleThinkingBlockVisibility());
+ 		this.defaultEditor.onAction("app.editor.external", () => void this.handleOpenExternalEditor());
+ 		this.defaultEditor.onAction(
+@@ -3137,10 +3157,34 @@
+ 		this.showStatus("Startup is still in progress");
+ 	}
+ 
++ private async submitHostPrompt(text: string, options?: Parameters<AgentSession["prompt"]>[1]): Promise<void> {
++  if (this.options.host) {
++   await this.options.host.submit(text, options);
++   this.rebuildChatFromMessages();
++   this.footer.invalidate();
++   this.ui.requestRender();
++  } else await this.session.prompt(text, options);
++ }
++
+ 	private setupEditorSubmitHandler(): void {
+ 		this.defaultEditor.onSubmit = async (text: string) => {
+-			text = text.trim();
+-			if (!text) return;
++			if (!text.trim()) return;
++   // Normalize command syntax only; preserve ordinary text and multiline materials.
++   if (!text.includes("\n") && text.trimStart().startsWith("/")) {
++    text = text.trimStart();
++    if (!/^\/one[ \t]+\S/.test(text)) text = text.trimEnd().replace(/^(\/[^\s]+)[ \t]+/, "$1 ");
++   }
++   const host = this.options.host;
++   if (host) {
++    if (host.beforeSubmit && !text.includes("\n") && ((text.startsWith("/") && !/^\/one[ \t]+/.test(text)) || text.startsWith("!")) && !(await host.beforeSubmit(text))) return;
++    if (this.ui.terminal.columns < 40 || this.ui.terminal.rows < 12) {
++     this.showWarning("终端过小：至少 40×12；草稿保留。"); this.editor.setText(text); return;
++    }
++    if (host.isBusy()) {
++     this.showWarning("任务仍在运行；草稿保留，不自动排队。Esc / Ctrl+C 取消整条任务。"); this.editor.setText(text); return;
++    }
++    if (!text.startsWith("/") || text.includes("\n") || /^\/one[ \t]+/.test(text)) { this.editor.setText(""); await this.submitHostPrompt(text); return; }
++   }
+ 
+ 			// Handle commands
+ 			if (text === "/settings") {
+@@ -3307,7 +3351,7 @@
+ 				if (this.isExtensionCommand(text)) {
+ 					this.editor.addToHistory?.(text);
+ 					this.editor.setText("");
+-					await this.session.prompt(text);
++					await this.submitHostPrompt(text);
+ 				} else {
+ 					this.queueCompactionMessage(text, "steer");
+ 				}
+@@ -3319,7 +3363,7 @@
+ 			if (this.session.isStreaming) {
+ 				this.editor.addToHistory?.(text);
+ 				this.editor.setText("");
+-				await this.session.prompt(text, { streamingBehavior: "steer" });
++				await this.submitHostPrompt(text, { streamingBehavior: "steer" });
+ 				this.updatePendingMessagesDisplay();
+ 				this.ui.requestRender();
+ 				return;
+@@ -3345,6 +3389,11 @@
+ 	}
+ 
+ 	private async handleEvent(event: AgentSessionEvent): Promise<void> {
++  if (this.options.host?.project && "message" in event) {
++   const projected = this.options.host.project(event.message);
++   if (!projected) return;
++   event = { ...event, message: projected } as AgentSessionEvent;
++  }
+ 		if (!this.isInitialized) {
+ 			await this.init();
+ 		}
+@@ -3803,6 +3852,7 @@
+ 	}
+ 
+ 	private addMessageToChat(message: AgentMessage, options?: { populateHistory?: boolean }): void {
++  if (this.options.host?.project) { const projected = this.options.host.project(message); if (!projected) return; message = projected; }
+ 		switch (message.role) {
+ 			case "bashExecution": {
+ 				const component = new BashExecutionComponent(message.command, this.ui, message.excludeFromContext);
+@@ -3942,7 +3992,8 @@
+ 				continue;
+ 			}
+ 
+-			const message = item;
++			const message = this.options.host?.project ? this.options.host.project(item) : item;
++   if (!message) continue;
+ 			// Assistant messages need special handling for tool calls
+ 			if (message.role === "assistant") {
+ 				this.addMessageToChat(message);
+@@ -4187,6 +4238,7 @@
+ 	// =========================================================================
+ 
+ 	private handleCtrlC(): void {
++  if (this.options.host?.isBusy()) { void this.options.host.cancel(); return; }
+ 		const now = Date.now();
+ 		if (now - this.lastSigintTime < 500) {
+ 			void this.shutdown();
+@@ -4210,6 +4262,8 @@
+ 
+ 	private async shutdown(options?: { fromSignal?: boolean }): Promise<void> {
+ 		if (this.isShuttingDown) return;
++  if (this.options.host?.beforeExit && !(await this.options.host.beforeExit(this.editor.getText()))) return;
++  await this.options.host?.cancel();
+ 		this.isShuttingDown = true;
+ 		// Keep signal handlers registered until terminal cleanup has completed.
+ 		// `signal-exit` checks the listener list during the same SIGTERM/SIGHUP
+@@ -4227,6 +4281,7 @@
+ 			this.themeController.disableAutoSync();
+ 			await this.ui.terminal.drainInput(1000);
+ 			this.stop();
++   await this.options.host?.afterStop?.();
+ 			process.exit(0);
+ 		}
+ 
+@@ -4240,6 +4295,7 @@
+ 
+ 		this.stop();
+ 		await this.runtimeHost.dispose();
++  await this.options.host?.afterStop?.();
+ 
+ 		const resumeCommand = formatResumeCommand(this.sessionManager);
+ 		if (resumeCommand) {
+@@ -4394,7 +4450,7 @@
+ 			if (this.isExtensionCommand(text)) {
+ 				this.editor.addToHistory?.(text);
+ 				this.editor.setText("");
+-				await this.session.prompt(text);
++				await this.submitHostPrompt(text);
+ 			} else {
+ 				this.queueCompactionMessage(text, "followUp");
+ 			}
+@@ -4406,7 +4462,7 @@
+ 		if (this.session.isStreaming) {
+ 			this.editor.addToHistory?.(text);
+ 			this.editor.setText("");
+-			await this.session.prompt(text, { streamingBehavior: "followUp" });
++			await this.submitHostPrompt(text, { streamingBehavior: "followUp" });
+ 			this.updatePendingMessagesDisplay();
+ 			this.ui.requestRender();
+ 		}
+@@ -4716,7 +4772,7 @@
+ 				// When retry is pending, queue messages for the retry turn
+ 				for (const message of queuedMessages) {
+ 					if (this.isExtensionCommand(message.text)) {
+-						await this.session.prompt(message.text);
++						await this.submitHostPrompt(message.text);
+ 					} else if (message.mode === "followUp") {
+ 						await this.session.followUp(message.text);
+ 					} else {
+@@ -4732,7 +4788,7 @@
+ 			if (firstPromptIndex === -1) {
+ 				// All extension commands - execute them all
+ 				for (const message of queuedMessages) {
+-					await this.session.prompt(message.text);
++					await this.submitHostPrompt(message.text);
+ 				}
+ 				return;
+ 			}
+@@ -4743,7 +4799,7 @@
+ 			const rest = queuedMessages.slice(firstPromptIndex + 1);
+ 
+ 			for (const message of preCommands) {
+-				await this.session.prompt(message.text);
++				await this.submitHostPrompt(message.text);
+ 			}
+ 
+ 			// Start a prompt when idle, or queue it into a run still finishing compaction.
+@@ -4756,7 +4812,7 @@
+ 			// Queue remaining messages
+ 			for (const message of rest) {
+ 				if (this.isExtensionCommand(message.text)) {
+-					await this.session.prompt(message.text);
++					await this.submitHostPrompt(message.text);
+ 				} else if (message.mode === "followUp") {
+ 					await this.session.followUp(message.text);
+ 				} else {
+@@ -6207,7 +6263,7 @@
+ 		} else if (prompt.type === "manual_code") {
+ 			response = dialog.showManualInput(prompt.message);
+ 		} else {
+-			response = dialog.showPrompt(prompt.message, prompt.placeholder);
++			response = dialog.showPrompt(prompt.message, prompt.placeholder, prompt.type === "secret" && Boolean(this.options.host));
+ 		}
+ 		if (!prompt.signal) return response;
+ 		if (prompt.signal.aborted) throw new Error("Login cancelled");
+--- a/packages/coding-agent/src/modes/interactive/tui-renderer.ts
++++ b/packages/coding-agent/src/modes/interactive/tui-renderer.ts
+@@ -10,6 +10,7 @@
+ 	readonly showHardwareCursor: boolean;
+ 	readonly logDirectory: string;
+ 	readonly terminal?: Terminal;
++ readonly copySelection?: (text: string) => Promise<void>;
+ 	readonly onRightClickPaste?: () => void;
+ 	readonly fullscreenCopyOnSelect?: boolean;
+ 	readonly fullscreenWheelScrollLines?: WheelScrollLines;
+@@ -38,7 +39,8 @@
+ 			wheelScrollLines: options.fullscreenWheelScrollLines ?? "auto",
+ 			copySelection: async (text) => {
+ 				try {
+-					await copyToClipboard(text);
++					if (options.copySelection) await options.copySelection(text);
++     else await copyToClipboard(text);
+ 					return true;
+ 				} catch (error) {
+ 					return error instanceof Error ? error.message : String(error);
+--- a/packages/coding-agent/src/modes/interactive/components/login-dialog.ts
++++ b/packages/coding-agent/src/modes/interactive/components/login-dialog.ts
+@@ -11,6 +11,7 @@
+ export class LoginDialogComponent extends Container implements Focusable {
+ 	private contentContainer: Container;
+ 	private input: Input;
++ private secretInput = false;
+ 	private tui: TUI;
+ 	private abortController = new AbortController();
+ 	private inputResolver?: (value: string) => void;
+@@ -52,11 +53,18 @@
+ 		this.addChild(this.contentContainer);
+ 
+ 		// Input (always present, used when needed)
+-		this.input = new Input();
++		const owner = this;
++  this.input = new (class extends Input {
++   override render(width: number): string[] {
++    if (!owner.secretInput) return super.render(width);
++    return ["> " + "•".repeat(Math.min(this.getValue().length, Math.max(0, width - 3)))];
++   }
++  })();
+ 		this.input.onSubmit = () => {
+ 			if (this.inputResolver) {
+ 				const value = this.input.getValue();
+-				this.replaceInputWithSubmittedText(value);
++				this.replaceInputWithSubmittedText(this.secretInput ? "[hidden]" : value);
++    this.secretInput = false;
+ 				this.inputResolver(value);
+ 				this.inputResolver = undefined;
+ 				this.inputRejecter = undefined;
+@@ -151,7 +159,8 @@
+ 	 * Called by onPrompt callback - show prompt and wait for input
+ 	 * Note: Does NOT clear content, appends to existing (preserves URL from showAuth)
+ 	 */
+-	showPrompt(message: string, placeholder?: string): Promise<string> {
++	showPrompt(message: string, placeholder?: string, secret = false): Promise<string> {
++  this.secretInput = secret;
+ 		this.contentContainer.addChild(new Spacer(1));
+ 		this.contentContainer.addChild(new Text(theme.fg("text", message), 1, 0));
+ 		if (placeholder) {
+--- a/packages/tui/src/components/editor.ts
++++ b/packages/tui/src/components/editor.ts
+@@ -369,6 +369,8 @@
+ 	public onSubmit?: (text: string) => void;
+ 	public onChange?: (text: string) => void;
+ 	public disableSubmit: boolean = false;
++ /** Preserve user material when an embedding host explicitly opts in. */
++ public preserveWhitespace: boolean = false;
+ 
+ 	constructor(tui: TUI, theme: EditorTheme, options: EditorOptions = {}) {
+ 		this.tui = tui;
+@@ -1362,7 +1364,8 @@
+ 
+ 	private submitValue(): void {
+ 		this.cancelAutocomplete();
+-		const result = this.expandPasteMarkers(this.state.lines.join("\n")).trim();
++		const expanded = this.expandPasteMarkers(this.state.lines.join("\n"));
++  const result = this.preserveWhitespace ? expanded : expanded.trim();
+ 
+ 		this.state = { lines: [""], cursorLine: 0, cursorCol: 0 };
+ 		this.pastes.clear();
+--- a/packages/coding-agent/src/index.ts
++++ b/packages/coding-agent/src/index.ts
+@@ -490,3 +490,6 @@
+ export { detectSupportedImageMimeTypeFromFile } from "./utils/mime.ts";
+ // Shell utilities
+ export { getPowerShellConfig, getShellConfig } from "./utils/shell.ts";
++
++// Optional SDK host transport configuration; Pi CLI already uses this helper.
++export { configureHttpDispatcher } from "./core/http-dispatcher.ts";

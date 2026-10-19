@@ -1,0 +1,172 @@
+# CoThink
+
+输入问题，主模型先给出初稿，一位副模型独立检查，再由主模型决定如何修订，交付完整答案并保留重要分歧。`/one` 让主模型独自处理本条消息。
+
+需要实际修改项目时，主模型可以选择成员、亲自执行、检查成果，并通过 agent-sync 的私有草稿、写范围协调和隔离检查接纳修改。成员不能继续委派。普通问答正常三次调用，`/one` 纯答一次；工作调用次数不设上限，随时可以取消。
+
+当前为 **0.3.0-agent-sync.2 预览版**，基于固定 Pi 1.0.0 SDK。已用 Kimi K3 / DeepSeek Flash 做真实问答和工作验证；模型仍可能误用工具、遗漏接纳步骤或产生多余调用，宿主会保留失败、拒绝把未处理的成果当作完整交付。单批实测不证明普遍质量或成本优势。
+
+需要 Node.js ≥22.19、npm 和 Git。本地验证平台为 Apple silicon macOS；其他平台尚未实机验证。
+
+## 安装与启动
+
+从 [预览发行页](https://github.com/XSY-28/Cothink-release/releases/tag/v0.3.0-agent-sync.2) 下载 `cothink-v2-0.3.0-agent-sync.2.tgz` 和 `SHA256SUMS`，放到同一目录后执行 `shasum -a 256 -c SHA256SUMS`。仓库保持私有时，下载需要仓库访问权限。
+
+发行包随附已锁定的生产依赖，可离线安装。更新旧安装前，保存旧安装包和 `~/.cothink` 配置；先用临时目录验证候选：
+
+```sh
+npm install --prefix ./cothink-check --offline --ignore-scripts ./cothink-v2-0.3.0-agent-sync.2.tgz
+./cothink-check/node_modules/.bin/cothink --version
+```
+
+确认后可安装到用户前缀；请保证 `$HOME/.local/bin` 在 PATH 中（例如将下面的 export 写入 `~/.zshrc`）：
+
+```sh
+export PATH="$HOME/.local/bin:$PATH"
+npm install --global --prefix "$HOME/.local" --offline --ignore-scripts ./cothink-v2-0.3.0-agent-sync.2.tgz
+cothink --version
+cothink init
+cothink
+```
+
+从源码使用：
+
+```sh
+git clone https://github.com/XSY-28/Cothink-release.git
+cd Cothink-release
+npm ci --ignore-scripts
+node bin/cothink.js init
+node bin/cothink.js
+```
+
+首次设置依次选择服务商、认证方式、主模型和有序副模型。API Key 隐藏输入，由 Pi 保存到 CoThink 数据根的 `pi/auth.json`；角色配置只保存模型引用。内置服务商不需要手填地址和协议。配置过程不发送生成请求；OAuth 登录可能需要浏览器操作。
+
+可只配置主模型，通过 `/one` 回答或工作。普通讨论缺少评审时会在首次请求前拒绝；不会自动改用别的模型。
+
+## 提问、取消与历史
+
+```sh
+cothink ask "问题"
+cothink ask --one "只用主模型回答"
+cothink ask --json "问题"
+cat question.txt | cothink > answer.md
+cothink history
+cothink show <任务ID> --all
+```
+
+交互、参数、管道、print 和 JSON 共用完成判断。默认显示完整最终稿；`--all`、`/chat` 与 Ctrl+O 展开初稿、评审、成员、工具原文和状态。明确标题下的评审处理说明默认收起，原始记录和后续模型上下文保留全文；标题无法识别时保留全文。partial、failed、cancelled、unknown 不成功退出，也不展示为最终交付。
+
+| 命令或按键 | 行为 |
+| --- | --- |
+| `/one <任务>` | 仅本条使用主模型；下一条恢复默认讨论 |
+| `/models` | 统一管理主模型和有序副模型：切换、添加、删除、排序；第一位副模型用于普通问答评审，其余可参与工作 |
+| `/login`、`/logout` | Pi 认证，使用 CoThink 独立数据根 |
+| `/thinking` | 当前模型实际支持的思考档位 |
+| `/chat`、Ctrl+O | 零生成调用查看详情；Esc 返回原草稿 |
+| `/changelog` | 离线查看 CoThink 完整更新记录；升级后首次启动显示摘要，同一版本不重复 |
+| Esc、Ctrl+C | 取消当前整条任务，包括成员和受管工具进程 |
+| `/new`、`/resume`、`/fork`、`/tree`、`/reload` | Pi 会话操作；运行中拒绝切换，不自动重发未知请求 |
+| Enter | 发送完整输入 |
+| Shift+Return、Ctrl+J | 换行；支持扩展编码及 macOS Terminal 的 Escape+Return 编码 |
+
+切换主模型时，原主模型会回到副模型列表：选择已有副模型则交换两者的位置；选择名单外的新模型则把原主模型放到副模型第一位。模型已有设置和其他副模型的相对顺序保留；删除模型使用「删除副模型」。
+
+`-c` 继续当前目录最近会话，`-r` 打开选择器。运行时新输入保留为草稿，不自动排队。多行粘贴中的命令文字保留为材料；小于 40×12 时暂停发送。选中文字使用 macOS 原生剪贴板顺序复制，写入完成后才确认。
+
+直接 `!` Shell 与手动压缩入口仍关闭。工作中的 Shell 使用受管 Pi 工具。
+
+## 执行项目工作
+
+在有 HEAD 提交的 Git 项目中启动并描述实际修改。主模型在首次请求中选择进入工作，无额外分类请求。`/one <任务>` 使用同一工具和版本流程独自工作。
+
+每位执行者使用 agent-sync 的独立源码投影。写范围冲突在执行前等待，读快照不占写锁；已知范围可以直接声明，未知时先观察。领导可亲自工作，collect先返回可处理成果；成员不能递归委派。原目录未提交内容不自动进入起点，原用户目录不覆盖。非Git或无HEAD目录明确拒绝。
+
+文件工具读取权威tree，写入有旧内容前提并整批原子提交；候选固定后仍可修订。领导审阅已展示内容后可直接accept_change，宿主负责候选ID。反馈保留原草稿/会话；具体依据或范围变化通过refresh_change保留成果并反馈差异，不靠重造patch解决。
+
+默认采用项目声明的 npm test；可配置容器内固定检查命令和执行环境：
+
+```json
+"work": {
+  "checks": [{ "command": "node", "args": ["--test"] }],
+  "execution": {
+    "engine": "docker",
+    "image": "node@sha256:0e5f906573693feaa1e21057ebdcfdb5bd5021f050b2dc7c9deceb629c7da2a8",
+    "network": "none",
+    "limits": { "memoryBytes": 4294967296, "cpus": 2, "pids": 256 },
+    "artifactPaths": ["node_modules"]
+  }
+}
+```
+
+纯文件操作不要求Docker。Shell和非空正式检查需要可用的本机Docker引擎、固定镜像及其工具/依赖；首次Shell才创建容器，同一修改复用。网络默认关闭，项目依赖需宿主预置到固定镜像，不能借用成员放入的node_modules作可信检查。宿主绝对命令、秘密env、任意挂载和宿主Shell回退不支持。未配置/不可用会报告具体环境缺口，不影响问答或只读历史。
+
+Shell是Linux隔离环境，工具交接暂停全部进程，后台服务可跨命令使用；不承诺macOS专属编译/GUI/宿主权限。非法或越界源变化整体拒绝并保留现场，明确resetExecution才封存后恢复。长日志使用read的 output:<outputRef> 入口，offset/limit仍按行；日志路径不能写入或作为源码搜索。
+
+最新组合满足固定检查后，唯一正式ref才条件更新；空策略明确unverified。响应未知只能查询原请求，不能换ID重发。最终给出实际版本、检查和只读成果目录；写回原分支仍需明确Git操作。
+
+元数据默认位于 COTHINK_HOME/agent-sync，旧 projects 留作历史解释。新写路径不会自动接管已有项目；先处理所有旧open/prepared/unknown记录，再明确迁移：
+
+```sh
+cothink migrate-work /absolute/project --json
+# 没有任何新接纳时，才允许显式回退元数据；不会reset历史
+cothink migrate-work /absolute/project --rollback --json
+```
+
+迁移保存原元数据、回执、修改和引用快照，停用旧写入口，再登记原正式ref。数据损坏、缺ref、旧请求未决或活跃writer都会停止。旧安装对迁移项目的写入被阻止，旧只读事实仍可查。已有新接纳后必须沿新历史修复，不能简单换回旧程序继续写。
+
+原生skills、模板和已审查纯UI资源保留。第三方JS须在加载前审核；当前允许固定哈希的orca-prefill纯UI文件，未适配的pi-web-access克隆/缓存、MCP服务器、plannotator和自有模型循环扩展拒绝加载。选中一个工具名不授予宿主写权限，候选中的.pi也不自动加载。兼容边界和源码/localhost/安装/PTY/真实模型证据见 VALIDATION.md。
+
+## 数据与旧配置
+
+数据根默认 `~/.cothink`，可用 `COTHINK_HOME` 指定。新数据分别存于 `pi/`、`tasks/`、`requests/`、`projects/`。旧 `runs/` 与会话记录继续只读可查，不自动恢复执行。
+
+旧格式配置须显式导入：
+
+```sh
+cothink init --import-legacy
+```
+
+导入先备份原字节，再保存 Pi 认证和模型引用。回退时恢复保留的旧程序和对应旧配置，保留新旧历史；若配置在切换后又被修改，先核对差异，不强制覆盖。不要把认证文件或私有备份提交到仓库。
+
+## 选择 Pi 资源
+
+不自动继承 `~/.pi` 的全部设置。可在现有配置添加本地资源路径和明确工具名：
+
+```json
+"piResources": {
+  "skills": ["/absolute/path/to/skill"],
+  "extensions": ["/absolute/path/to/extension.ts"],
+  "tools": ["fetch_content"]
+}
+```
+
+`skills` 是普通自然语言问答的预载来源，默认不启用任何技能。配置路径后，每条任务会将其中允许自动调用的技能主文件正文加入实际模型上下文，主模型按当前目标与描述判断是否适用，无需 `/skill:`。普通纯答仍是三次，`/one` 仍是一次；技能不会扩大工具权限或构成执行授权。
+
+每条任务冻结同一份内容供初稿、评审、修订使用；下一条才读取文件更新。只加载主文件，不递归读取引用或执行脚本；正文增加输入用量，不截断或自动重试。文件缺失、无效元数据、空目录及不同文件同名会在生成前报错，真实文件重复路径去重。`disable-model-invocation: true` 不自动预载。
+
+`/skill:name`（包括 `/one /skill:name`）优先使用 Pi 原生显式展开，本条不再叠加自动预载列表，禁用自动调用的技能仍可显式使用。`/chat`、Ctrl+O、`show ID --all` 可查看已预载的名称、来源和哈希；这只表示已提供材料，不代表模型已使用。`show ID --json` 的原请求保留正文，旧任务不受技能文件之后的修改影响。恢复和查看本身不生成。
+
+另有 `prompts`、`themes` 路径数组。主会话加载选定资源，工作领导只启用列出的扩展工具；成员使用独立资源集。原生技能的加载、reload 和命令展开已有检查。扩展须通过当前宿主的加载前审查；当前未适配的 pi-web-access、MCP adapter、plannotator 及自有模型循环扩展均拒绝加载。历史版本的加载/注册结果不能作为当前兼容承诺。
+
+不安装或加载 subagent / agent-teams 插件；委派直接使用项目内 Pi SDK 会话。
+
+## 调用与验证规则
+
+- 默认不设本地模型超时或可省略的输出额度；`--timeout MS`、`--max-output-tokens N` 可显式设置，运行前展示实际政策。协议必填额度须配置，按模型配置的显式额度也会传到实际请求。
+- 自动重试、压缩、预热关闭。未知请求不重发；纠错须有具体反馈。接纳结果未知时查询既有 requestId，不用新 ID 重做。
+- 请求意图和工具意图先保存；保存失败则停止副作用。用量缺失保持未知，目录费用估算与账单区分，未知费用为 null。
+- 源码与安装包的 localhost fixture、PTY、真实模型和用户现场检查属于不同证据层；具体版本及限制见 [VALIDATION.md](VALIDATION.md)。尚无 CI、异机或跨平台实机结论。
+
+源码验证与固定依赖重建：
+
+```sh
+npm test
+npm run test:pi-terminal
+npm run build:pi
+```
+
+Pi 来源、固定补丁和产物哈希在 `vendor/pi-patches/`，许可说明在 `THIRD_PARTY_NOTICES.md`。重建使用固定源码与已发布目录数据，不刷新为最新模型目录。源码中的 `archive/agent-sync-git-20261019/` 只保留迁移测试所需的旧实现夹具，发行包与当前执行入口均不导入它。
+
+## 许可证
+
+CoThink 原创代码与仓库内 agent-sync 内核采用 [MIT](LICENSE)。第三方依赖保留各自许可证，固定 Pi 补丁、来源和许可说明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。

@@ -1,0 +1,22 @@
+node_modules/
+.DS_Store
+.cothink/
+*.tgz
+
+# Local execution evidence and generated Python caches
+/work/
+/.superpowers/
+__pycache__/
+*.py[cod]
+
+# Local environment credentials
+.env
+.env.*
+
+# Reproducible fixed dependency artifacts
+!vendor/pi-deps/*.tgz
+
+# Private credentials and local sessions
+.pi/
+auth.json
+*.log

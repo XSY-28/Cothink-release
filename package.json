@@ -1,0 +1,84 @@
+{
+  "name": "cothink-v2",
+  "version": "0.3.0-agent-sync.2",
+  "private": true,
+  "files": [
+    "bin/cothink.js",
+    "src/cli.js",
+    "src/config.js",
+    "src/context.js",
+    "src/discussion.js",
+    "src/interactive.js",
+    "src/clipboard.js",
+    "src/thinking.js",
+    "src/storage.js",
+    "src/terminal.js",
+    "src/task.js",
+    "src/request-policy.js",
+    "src/pi-runtime.js",
+    "src/setup.js",
+    "src/presentation.js",
+    "src/extensions",
+    "prompts",
+    "vendor/pi-deps",
+    "vendor/pi-patches",
+    "scripts/build-pi-deps.mjs",
+    "README.md",
+    "THIRD_PARTY_NOTICES.md",
+    "src/versioning.js",
+    "src/git-versioning.js",
+    "src/workspaces.js",
+    "src/workers.js",
+    "CHANGELOG.md",
+    "packages/agent-sync/package.json",
+    "packages/agent-sync/src",
+    "LICENSE",
+    "VALIDATION.md",
+    "packages/agent-sync/LICENSE",
+    "packages/agent-sync/README.md"
+  ],
+  "type": "module",
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "bin": {
+    "cothink": "./bin/cothink.js"
+  },
+  "scripts": {
+    "test": "node --test test/pi-*.test.js test/agent-sync-*.test.js test/versioning-contract.test.js test/clipboard.test.js test/final-display.test.js",
+    "test:terminal": "python3 test/pi_terminal_checks.py && python3 test/pi_slash_checks.py && python3 test/pi_changelog_checks.py",
+    "start": "node bin/cothink.js",
+    "test:pi": "node --test test/pi-*.test.js",
+    "test:pi-terminal": "python3 test/pi_terminal_checks.py && python3 test/pi_slash_checks.py && python3 test/pi_changelog_checks.py",
+    "build:pi": "node scripts/build-pi-deps.mjs",
+    "test:sync": "node --test test/versioning-contract.test.js test/agent-sync-*.test.js",
+    "test:work": "node --test test/agent-sync-dispatch.test.js test/agent-sync-entrypoints.test.js",
+    "test:agent-sync-core": "node --test packages/agent-sync/test/*.test.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "file:vendor/pi-deps/anthropic-ai-sdk-0.124.0.tgz",
+    "@earendil-works/pi-ai": "1.0.0",
+    "@earendil-works/pi-coding-agent": "file:vendor/pi-deps/earendil-works-pi-coding-agent-1.0.0-cothink.9.tgz",
+    "@earendil-works/pi-tui": "file:vendor/pi-deps/earendil-works-pi-tui-1.0.0.tgz",
+    "openai": "file:vendor/pi-deps/openai-7.19.0.tgz",
+    "typebox": "1.3.27"
+  },
+  "overrides": {
+    "openai": "$openai",
+    "@anthropic-ai/sdk": "$@anthropic-ai/sdk",
+    "@earendil-works/pi-ai": "$@earendil-works/pi-ai"
+  },
+  "bundledDependencies": [
+    "@anthropic-ai/sdk",
+    "@earendil-works/pi-ai",
+    "@earendil-works/pi-coding-agent",
+    "@earendil-works/pi-tui",
+    "openai",
+    "typebox"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/XSY-28/Cothink-release.git"
+  }
+}
