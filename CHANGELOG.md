@@ -7,6 +7,7 @@
 - 新增 `cothink install/list/remove`，所有 Team 共享 npm 资源包，无需模型配置，管理不调用模型。
 - skill、提示模板、主题通过校验后加载；安装脚本关闭，未知 JavaScript 显示未启用。
 - 包变更使用候选目录和可核验回退；活跃窗口阻止变更，失败、取消与缺失包有明确诊断。
+- 增加公开 npm 分发入口，可通过 `npm install -g cothink-v2` 安装。
 
 ## 0.4.0-team.2 · 2026-10-20
 

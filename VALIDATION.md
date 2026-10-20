@@ -2,6 +2,12 @@
 
 本仓库是 CoThink 0.5.0-packages.1 的干净 Alpha 源码，基于固定 Pi 1.0.0、定制 coding-agent 1.0.0-cothink.9 与 agent-sync 0.1.1（协议1）。本轮增加同一数据根共享的npm包管理，Team与模型执行规则保持。Pi固定依赖、agent-sync内核及许可证保留。
 
+## npm 分发
+
+公开 npm 包沿用0.5.0-packages.1的同一运行代码、固定Pi补丁和agent-sync内核。分发配置取消private标记，包内容仍由明确files清单及bundledDependencies限定，不包含测试数据、凭据或私有开发记录。
+
+发布验收分别检查固定tarball的内容/完整性、没有忽略生命周期脚本的普通全局安装、实际命令入口，以及发布后无登录环境从registry安装。npm的latest标签用于默认安装；预览状态和macOS支持范围保持。新增分发入口不构成对其他系统、任意Pi插件或真实模型质量的验证。
+
 ## 可复现的本地检查
 
 在 Apple silicon macOS、Node.js ≥22.19 上从干净依赖安装运行：

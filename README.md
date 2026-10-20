@@ -10,34 +10,37 @@ CoThink 基于 Pi 开发，可复用 Pi 社区的技能（Skills）、提示模�
 
 需要 Node.js ≥22.19、npm 和 Git。
 
-最新已发布安装包为 **0.3.0-agent-sync.2**；使用 Team 与包管理功能请按下方源码入口运行 **0.5.0-packages.1**。
-
-从 [预览发行页](https://github.com/XSY-28/Cothink-release/releases/tag/v0.3.0-agent-sync.2) 下载 `cothink-v2-0.3.0-agent-sync.2.tgz` 和 `SHA256SUMS`，放到同一目录后执行 `shasum -a 256 -c SHA256SUMS`。仓库保持私有时，下载需要仓库访问权限。
-
-发行包随附已锁定的生产依赖，可离线安装。更新旧安装前，保存旧安装包和 `~/.cothink` 配置；先用临时目录验证候选：
+安装最新版：
 
 ```sh
-npm install --prefix ./cothink-check --offline --ignore-scripts ./cothink-v2-0.3.0-agent-sync.2.tgz
-./cothink-check/node_modules/.bin/cothink --version
+npm install -g cothink-v2
 ```
 
-确认后可安装到用户前缀；请保证 `$HOME/.local/bin` 在 PATH 中（例如将下面的 export 写入 `~/.zshrc`）：
+安装后运行 `cothink`。首次启动会引导你选择主副模型、为 Team 命名并配置认证；已有认证会继续复用。也可以运行 `cothink init` 单独完成设置，或用 `cothink --version` 检查版本。
+
+更新到最新版使用同一条命令：
 
 ```sh
+npm install -g cothink-v2@latest
+```
+
+如果全局安装提示权限不足，可安装到自己的目录，并将其加入 PATH：
+
+```sh
+npm install -g --prefix "$HOME/.local" cothink-v2
 export PATH="$HOME/.local/bin:$PATH"
-npm install --global --prefix "$HOME/.local" --offline --ignore-scripts ./cothink-v2-0.3.0-agent-sync.2.tgz
-cothink --version
-cothink init
-cothink
 ```
 
-从源码使用：
+将上面的 `export` 加入 `~/.zshrc`，新终端也会使用该路径。更新前建议保留 `~/.cothink` 的备份；已经打开的旧进程需要退出重开。
+
+### 从源码运行
+
+GitHub 仓库保持私有时，克隆需要仓库访问权限；安装公开 npm 包不需要 GitHub 登录。
 
 ```sh
 git clone https://github.com/XSY-28/Cothink-release.git
 cd Cothink-release
 npm ci --ignore-scripts
-node bin/cothink.js init
 node bin/cothink.js
 ```
 
@@ -86,16 +89,14 @@ cothink show <任务ID> --all
 
 ## 安装和查看 Pi 资源包
 
-在已检出的当前源码目录中使用：
-
 ```sh
-node bin/cothink.js install npm:包名
-node bin/cothink.js install npm:@scope/包名@1.2.3
-node bin/cothink.js list --json
-node bin/cothink.js remove npm:包名
+cothink install npm:包名
+cothink install npm:@scope/包名@1.2.3
+cothink list --json
+cothink remove npm:包名
 ```
 
-安装当前源码构建的包后，可使用等价的 `cothink install/list/remove`。上方旧版已发布安装包尚不包含这些命令。
+从源码运行时，将上面的 `cothink` 替换为 `node bin/cothink.js`。
 
 包保存在当前 `COTHINK_HOME/pi/npm`，同一数据目录的所有 Team 共享。管理命令不需要模型配置、API Key 或已命名 Team，不发送生成请求。首版只支持 npm 来源；不支持本地路径、Git、URL 或 `--local`。
 
