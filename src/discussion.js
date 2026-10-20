@@ -40,20 +40,19 @@ export async function runTurn({
   if (!input.trim()) throw Error("问题不能为空");
   const frozen = structuredClone(config);
   if (options.maxOutputTokens !== undefined) {
-    for (const ref of [frozen.main, ...frozen.secondary]) ref.maxOutputTokens = options.maxOutputTokens;
+    for (const ref of [frozen.main, ...frozen.secondary])
+      ref.maxOutputTokens = options.maxOutputTokens;
   }
-  if (frozen.team) frozen.team = snapshotTeam({ ...frozen.team, main: frozen.main, secondary: frozen.secondary });
+  if (frozen.team)
+    frozen.team = snapshotTeam({
+      ...frozen.team,
+      main: frozen.main,
+      secondary: frozen.secondary,
+    });
   validateConfig(frozen);
   const catalog = mainRuntime?.modelRuntime ?? (await createModelRuntime(home));
   await validateModelRefs(frozen, catalog, { singleModel });
-  selectedResources(frozen, cwd);
-  const answerSkills = /^\/skill:[^\s]+(?:\s|$)/.test(input)
-    ? []
-    : freezeAnswerSkills({
-        cwd,
-        home,
-        paths: frozen.piResources?.skills ?? [],
-      });
+  const configuredResources = selectedResources(frozen, cwd);
   const host = {};
   let rt = mainRuntime;
   let own = !rt;
@@ -72,6 +71,23 @@ export async function runTurn({
       },
       ...options,
     });
+  let answerSkills;
+  try {
+    await rt.checkPackages({ resourceOptions: configuredResources });
+    answerSkills = /^\/skill:[^\s]+(?:\s|$)/.test(input)
+      ? []
+      : freezeAnswerSkills({
+          cwd,
+          home,
+          paths: [
+            ...(configuredResources.additionalSkillPaths ?? []),
+            ...rt.packageSnapshot.skills,
+          ],
+        });
+  } catch (error) {
+    if (own) rt.dispose();
+    throw error;
+  }
   const manager = rt.sessionManager;
   let task;
   try {
@@ -80,7 +96,11 @@ export async function runTurn({
       throw Error(
         "本地或未知命令不能作为问题提交；请在交互界面使用本地命令。未发送模型请求。",
       );
-    if (frozen.team && JSON.stringify(readSessionTeam(manager.getBranch())) !== JSON.stringify(frozen.team)) {
+    if (
+      frozen.team &&
+      JSON.stringify(readSessionTeam(manager.getBranch())) !==
+        JSON.stringify(frozen.team)
+    ) {
       rt.assertOwned();
       manager.appendCustomEntry("cothink-team", { team: frozen.team });
     }
@@ -101,6 +121,8 @@ export async function runTurn({
     if (own) rt.dispose();
     throw error;
   }
+  task.packageSnapshot = rt.packageSnapshot;
+  task.resourceOptions = { ...rt.resourceOptions, ...configuredResources };
   host.task = task;
   host.runtime = rt;
   rt.hostContext?.(task);
@@ -158,6 +180,7 @@ export async function runTurn({
       cwd,
       modelRef: ref,
       role: `review-${task.record.id}`,
+      packageSnapshot: rt.packageSnapshot,
       resourceOptions: { systemPrompt: prompt("review") },
       ...options,
     });

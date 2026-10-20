@@ -1,10 +1,11 @@
 {
   "name": "cothink-v2",
-  "version": "0.4.0-team.2",
+  "version": "0.5.0-packages.1",
   "private": true,
   "files": [
     "bin/cothink.js",
     "src/cli.js",
+    "src/packages.js",
     "src/config.js",
     "src/teams.js",
     "src/context.js",
@@ -54,7 +55,8 @@
     "build:pi": "node scripts/build-pi-deps.mjs",
     "test:sync": "node --test test/versioning-contract.test.js test/agent-sync-*.test.js",
     "test:work": "node --test test/agent-sync-dispatch.test.js test/agent-sync-entrypoints.test.js",
-    "test:agent-sync-core": "node --test packages/agent-sync/test/*.test.js"
+    "test:agent-sync-core": "node --test packages/agent-sync/test/*.test.js",
+    "test:packages": "node --test test/pi-packages.test.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "file:vendor/pi-deps/anthropic-ai-sdk-0.124.0.tgz",

@@ -451,6 +451,10 @@ export function acquireSessionWriter(home, sessionId, onLost = () => {}) {
   privateDirectory(home);
   privateDirectory(join(home, "sessions"));
   const directory = join(home, "sessions", `${sessionId}.locks`);
+  return acquireDirectoryWriter(directory, onLost);
+}
+
+function acquireDirectoryWriter(directory, onLost = () => {}) {
   privateDirectory(directory);
   const claims = () =>
     readdirSync(directory)
@@ -581,6 +585,88 @@ export function acquireSessionWriter(home, sessionId, onLost = () => {}) {
       released = true;
     },
   };
+}
+
+// Package changes use the same owner/PID/release semantics, with a separate lock.
+function directoryWriterActive(directory) {
+  if (!existsSync(directory)) return false;
+  const claims = readdirSync(directory)
+    .filter((n) => /^[1-9]\d*\.json$/.test(n))
+    .map((n) => Number(n.slice(0, -5)))
+    .sort((a, b) => a - b);
+  if (!claims.length) return false;
+  const generation = claims.at(-1);
+  let owner;
+  try {
+    owner = JSON.parse(
+      readFileSync(join(directory, `${generation}.json`), "utf8"),
+    );
+    if (
+      owner?.hostname !== hostname() ||
+      !Number.isSafeInteger(owner.pid) ||
+      owner.pid < 1 ||
+      !validId(owner.token)
+    )
+      throw Error("unknown");
+    const released = join(directory, `${generation}.released`);
+    if (existsSync(released)) {
+      if (JSON.parse(readFileSync(released, "utf8")).token !== owner.token)
+        throw Error("unknown release");
+      return false;
+    }
+  } catch {
+    throw problem(
+      "SESSION_LOCK_UNKNOWN",
+      "无法确认包/会话占用归属；原记录保留，拒绝读取或替换包。",
+    );
+  }
+  try {
+    process.kill(owner.pid, 0);
+    return true;
+  } catch (error) {
+    if (error.code === "ESRCH") return false;
+    throw problem("SESSION_LOCK_UNKNOWN", "无法确认包/会话进程已退出。");
+  }
+}
+
+export function acquirePackageLock(home) {
+  privateDirectory(join(home, "pi"));
+  try {
+    return acquireDirectoryWriter(join(home, "pi", "package-management.lock"));
+  } catch (error) {
+    if (error.code === "SESSION_BUSY")
+      throw problem("PACKAGE_BUSY", "另一个包操作正在进行；稍后重试。");
+    throw error;
+  }
+}
+
+export function assertPackageReadable(home) {
+  if (directoryWriterActive(join(home, "pi", "package-management.lock")))
+    throw problem(
+      "PACKAGE_BUSY",
+      "包操作正在进行；尚未读取受管资源，请稍后重新打开。",
+    );
+  if (existsSync(join(home, "pi", "package-operation.json")))
+    throw problem(
+      "PACKAGE_RECOVERY_REQUIRED",
+      "包提交尚未完成；停止加载。请退出会话后明确执行 install/remove 恢复。",
+    );
+}
+
+export function assertNoActivePiSessions(home) {
+  const directory = join(home, "pi", "sessions");
+  if (!existsSync(directory)) return;
+  for (const name of readdirSync(directory).filter((n) =>
+    n.endsWith(".locks"),
+  )) {
+    if (!validId(name.slice(0, -6)))
+      throw problem("SESSION_LOCK_UNKNOWN", "存在无法确认身份的会话占用记录。");
+    if (directoryWriterActive(join(directory, name)))
+      throw problem(
+        "PACKAGE_SESSION_BUSY",
+        "同一数据目录仍有活跃 CoThink 会话（包括空闲窗口及所有 Team）；请先退出后重试。",
+      );
+  }
 }
 
 export function listRuns(home) {

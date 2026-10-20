@@ -587,7 +587,8 @@ export async function runWork({
           cwd: m.binding.current.workspace,
           modelRef: m.record.model,
           role: "member-" + m.record.memberId,
-          resourceOptions: { systemPrompt: prompt("worker") },
+          packageSnapshot: task.packageSnapshot,
+          resourceOptions: { ...task.resourceOptions, systemPrompt: prompt("worker") },
           toolDefinitions: defs,
           activeToolNames: m.record.readOnly
             ? ["read", "grep", "find", "ls"]
@@ -607,7 +608,7 @@ export async function runWork({
       m.runtime.bindTask(task, m.stage);
       m.record.sessionFile = m.runtime.sessionManager.getSessionFile();
       save();
-      const user = `原始用户任务：\n${task.record.input}\n任务：${m.record.task}\n材料与验收：${m.record.materials}\n实际输入版本：${m.binding.current.baseVersion}；源码投影：${m.binding.current.workspace}\n${m.feedback ? "针对已有成果的具体反馈（同一草稿，不是原样重发）：\n" + m.feedback : ""}\n${m.binding.refreshInput ? JSON.stringify(m.binding.refreshInput) : ""}`;
+      const user = `原始用户任务：\n${task.record.input}\n任务：${m.record.task}\n材料与验收：${m.record.materials}\n实际输入版本：${m.binding.current.baseVersion}；源码投影：${m.binding.current.workspace}\n${m.feedback ? "针对已有成果的具体反馈（同一草稿，不是原样重发）：\n" + m.feedback : ""}\n${m.binding.refreshInput ? JSON.stringify(m.binding.refreshInput) : ""}\n${renderAnswerSkills(task.answerSkills ?? [])}`;
       m.result = await m.runtime.prompt(user);
       guard();
       if (m.controller.signal.aborted) throw problem("CANCELLED", "成员已取消");
@@ -1317,8 +1318,9 @@ export async function runWork({
       cwd: initial.workspace,
       modelRef: config.main,
       role: "leader-" + task.record.id,
+      packageSnapshot: task.packageSnapshot,
       resourceOptions: {
-        ...selectedResources(config, cwd),
+        ...(task.resourceOptions ?? selectedResources(config, cwd)),
         systemPrompt: prompt("leader"),
       },
       extraToolNames: config.piResources?.tools ?? [],

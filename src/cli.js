@@ -5,6 +5,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { loadConfig, positiveInteger } from "./config.js";
 import { setupModels, migrateTeamConfig, importLegacyConfig, parseTurnInput } from "./setup.js";
 import { resolveTeamConfig } from "./teams.js";
+import { parsePackageCommand, runPackageCommand, formatPackageResult } from "./packages.js";
 import { runTurn } from "./discussion.js";
 import { listTasks, readTask } from "./task.js";
 import { listRuns, readRun } from "./storage.js";
@@ -27,6 +28,7 @@ const help = `CoThink
   cothink init --import-legacy        显式备份并导入旧配置（不生成）
   cothink [ask] [--one] [--all|--json] [问题]
   cothink history [--json] | cothink show ID [--all|--json]
+  cothink install npm:包名 | cothink list | cothink remove npm:包名 [--json]
   cothink migrate-work 项目路径 [--rollback] [--json]  显式旧格式迁移/无新接纳时回退
   cat question.txt | cothink
 /one <任务>：仅本条使用主模型；纯答一次。默认第一位副模型评审，主模型修订，共三次。
@@ -59,6 +61,15 @@ export async function main(args = process.argv.slice(2)) {
   };
   process.stdout.on("error", pipeError);
   try {
+    const management = parsePackageCommand(args);
+    if (management) {
+      const outcome = management.error
+        ? {exitCode:2,result:{command:management.command,packages:[],error:management.error}}
+        : await runPackageCommand({home,cwd:process.cwd(),...management,signal:controller.signal,
+            onProgress: () => process.stderr.write("正在处理包文件；不调用模型。\n")});
+      process.stdout.write(management.json ? JSON.stringify(outcome.result,null,2)+"\n" : formatPackageResult(outcome.result));
+      return signalCode ?? outcome.exitCode;
+    }
     const { values, positionals } = parseArgs({
       args,
       allowPositionals: true,

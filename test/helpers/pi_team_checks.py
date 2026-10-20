@@ -19,6 +19,7 @@ server=ThreadingHTTPServer(('127.0.0.1',0),Handler)
 threading.Thread(target=server.serve_forever,daemon=True).start()
 class Session:
     def __init__(self,home,args=(),extra_env=None,ready="预算：纯答"):
+        self.package_settings=(home/'pi/settings.json').read_bytes() if (home/'pi/settings.json').exists() else None
         self.home=home; self.master,self.slave=pty.openpty(); self.original=termios.tcgetattr(self.slave)
         fcntl.ioctl(self.slave,termios.TIOCSWINSZ,struct.pack('HHHH',42,140,0,0))
         env=dict(os.environ,COTHINK_HOME=str(home),PI_OFFLINE='1',TERM='xterm-256color');env.pop('COTHINK_NO_TTY',None)
@@ -52,6 +53,7 @@ class Session:
         assert self.child.poll() is not None
         assert termios.tcgetattr(self.slave)==self.original,'terminal settings not restored'
         os.close(self.master);os.close(self.slave)
+        if self.package_settings is not None: assert (self.home/'pi/settings.json').read_bytes()==self.package_settings,'Team action modified package registry'
     def read(self):return json.loads((self.home/'config.json').read_text())
     def current(self):
         c=self.read();return next(t for t in c['teams'] if t['id']==c['lastUsedTeamId'])
@@ -74,6 +76,9 @@ def seed(home):
     (home/'pi/models.json').write_text(json.dumps({'providers':{'fixture':{
         'api':'openai-completions','apiKey':'local-only','baseUrl':f'http://127.0.0.1:{server.server_port}/v1',
         'models':[dict(id=m,name=m,reasoning=False,input=['text'],contextWindow=32000,maxTokens=4096,cost=dict(input=0,output=0,cacheRead=0,cacheWrite=0)) for m in ['main','r1','r2']]}}}))
+    if os.environ.get('COTHINK_TEST_PACKAGE_SOURCE'):
+        install=subprocess.run(['node',str(CLI),'install',os.environ['COTHINK_TEST_PACKAGE_SOURCE'],'--json'],cwd=home,env=dict(os.environ,COTHINK_HOME=str(home)),text=True,capture_output=True)
+        assert install.returncode==0,install.stdout+install.stderr
     return hashlib.sha256((home/'pi/models.json').read_bytes()).hexdigest()
 with tempfile.TemporaryDirectory(prefix='cothink-team-pty-') as folder:
     home=Path(folder);auth_hash=seed(home);s=Session(home)
@@ -298,3 +303,7 @@ for cancel in [False,True]:
 
 server.shutdown();server.server_close()
 print(json.dumps({'checks':checks,'localhostRequests':len(calls),'paidRequests':0,'termiosRestored':True},ensure_ascii=False,indent=2))
+
+if os.environ.get('COTHINK_TEST_PACKAGE_SOURCE'):
+    assert calls and all('PACKAGE_SKILL_BODY' in json.dumps(call) for call in calls), 'Team requests lost shared package skill material'
+    print('shared package sources preserved across Team lifecycle, restore and failure checks')

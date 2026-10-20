@@ -76,6 +76,7 @@ export async function runInteractive({
     const registered = team && loadConfig(home)?.teams?.some(t => t.id === team.id);
     ui?.setStatus("cothink-team", team ? safeText(`team：${team.name}${registered ? "" : "（已从列表删除，仅当前阵容保留）"}`) : "此历史会话尚未绑定 team");
     ui?.setWidget("cothink-budget", [budgetText(configState.value, false, {maxOutputTokens,timeout})]);
+    if(current?.packageError) ui?.setStatus("cothink-packages", safeText(current.packageError.message));
   }
   function rememberRecent(team) {
     const latest = loadConfig(home);
@@ -498,6 +499,7 @@ export async function runInteractive({
       modelRuntime: catalog,
       sessionManager: manager,
       sessionStartEvent,
+      allowPackageErrors: true,
       extensionFactories: [{ name: "cothink", factory: extension }],
       resourceOptions: {
         ...selectedResources(effective, targetCwd),
@@ -510,6 +512,7 @@ export async function runInteractive({
       maxOutputTokens,
       timeout,
     });
+    if (rt.packageError) notify(rt.packageError.message + "；历史和 /team 仍可使用，新生成已阻断。", "warning");
     rt.effectiveConfig = effective;
     rt.needsTeam = !effective.team;
     if (fresh && effective.team) persistSelection(rt, effective.team);
@@ -630,6 +633,7 @@ export async function runInteractive({
       });
     } catch (e) {
       mode?.editor.setText(draft || text);
+      if(e.code?.startsWith("PACKAGE_")) ui?.setStatus("cothink-packages",safeText(e.message));
       notify(e.message, "error");
     } finally {
       busy = false;
