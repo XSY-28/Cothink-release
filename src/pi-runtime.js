@@ -84,6 +84,7 @@ export function auditHostResources(paths = [], cwd = process.cwd()) {
 let transportConfigured = false;
 
 export async function createRuntime({
+  sessionStartEvent,
   home,
   cwd = process.cwd(),
   modelRef,
@@ -314,6 +315,7 @@ export async function createRuntime({
     result = await createAgentSessionFromServices({
       services,
       sessionManager: manager,
+      sessionStartEvent,
       model,
       thinkingLevel: modelRef.thinkingLevel ?? "off",
       tools: allowedNames,

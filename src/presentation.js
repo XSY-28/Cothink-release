@@ -51,6 +51,7 @@ export function detailsText(record, requests) {
     `任务 ${record.id ?? ""} · ${record.status}`,
     record.input ?? "",
     record.error ?? "",
+    record.team ? `team：${record.team.name} · ${record.team.id}\n主模型：${record.team.main.provider}/${record.team.main.modelId}\n有序副模型：${record.team.secondary.map(m => `${m.provider}/${m.modelId}`).join("、")}（阵容不等于已调用）` : "当时未记录 team",
     ...(record.answerSkills?.length
       ? [
           "\n本条已预载技能（提供材料，不代表已使用）：",

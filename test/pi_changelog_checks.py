@@ -1,6 +1,7 @@
 """CoThink release summaries across real CLI restarts; mocked management HTTP, zero model requests."""
 import errno, fcntl, hashlib, json, os, pty, select, signal, struct, subprocess, tempfile, termios, time
 from pathlib import Path
+from helpers.team_fixture import team_config
 
 ROOT = Path(__file__).resolve().parents[1]
 CLI = Path(os.environ.get('COTHINK_TEST_CLI', str(ROOT / 'bin/cothink.js'))).resolve()
@@ -11,6 +12,7 @@ with tempfile.TemporaryDirectory(prefix='cothink-changelog-') as folder:
     (home / 'pi').mkdir()
     (home / 'config.json').write_text(json.dumps({'formatVersion': 2, 'main': {'provider': 'fixture', 'modelId': 'main'}, 'secondary': [{'provider': 'fixture', 'modelId': 'review'}]}))
     (home / 'pi/models.json').write_text(json.dumps({'providers': {'fixture': {'api': 'openai-completions', 'apiKey': 'local-only', 'baseUrl': 'http://127.0.0.1:1/v1', 'models': [{'id': m, 'name': m, 'reasoning': False, 'input': ['text'], 'contextWindow': 32000, 'maxTokens': 4096, 'cost': {'input': 0, 'output': 0, 'cacheRead': 0, 'cacheWrite': 0}} for m in ['main', 'review']]}}}))
+    (home / 'config.json').write_text(json.dumps(team_config(json.loads((home / 'config.json').read_text()))))
     version = json.loads((CLI.parent.parent / 'package.json').read_text())['version']
     network = home / 'network.jsonl'
     preload = home / 'network-fixture.mjs'

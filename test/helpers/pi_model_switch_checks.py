@@ -1,6 +1,7 @@
 """Exercise host roster persistence through the real native model UI; localhost only."""
 import errno, fcntl, json, os, pty, select, signal, struct, subprocess, tempfile, termios, threading, time
 from pathlib import Path
+from team_fixture import team_config
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -22,7 +23,7 @@ with tempfile.TemporaryDirectory(prefix='cothink-model-switch-') as folder:
     reviewer = {'provider': 'fixture', 'modelId': 'r1', 'maxOutputTokens': 4096}
     outside = {'provider': 'fixture', 'modelId': 'outside'}
     path = home / 'config.json'
-    path.write_text(json.dumps({'formatVersion': 2, 'main': old, 'secondary': [reviewer]}))
+    path.write_text(json.dumps(team_config({'formatVersion': 2, 'main': old, 'secondary': [reviewer]})))
     (home / 'pi/models.json').write_text(json.dumps({'providers': {'fixture': {
         'api': 'openai-completions', 'apiKey': 'local-only', 'baseUrl': f'http://127.0.0.1:{server.server_port}/v1',
         'models': [{'id': m, 'name': m, 'reasoning': m == 'main', 'input': ['text'], 'contextWindow': 32000, 'maxTokens': 4096,
@@ -32,6 +33,8 @@ with tempfile.TemporaryDirectory(prefix='cothink-model-switch-') as folder:
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH', 40, 120, 0, 0))
     env = dict(os.environ, COTHINK_HOME=folder, PI_OFFLINE='1', TERM='xterm-256color')
     env.pop('COTHINK_NO_TTY', None)
+    for key in list(env):
+        if any(token in key.upper() for token in ['API_KEY','AUTH_TOKEN','ACCESS_KEY','CREDENTIAL','AWS_']): env.pop(key,None)
     child = subprocess.Popen(['node', str(CLI)], cwd=home, stdin=slave, stdout=slave, stderr=slave, env=env, start_new_session=True)
     transcript = bytearray()
     def pump():
@@ -47,8 +50,10 @@ with tempfile.TemporaryDirectory(prefix='cothink-model-switch-') as folder:
             assert child.poll() is None, 'CLI exited before a selection was saved'
     def send(value):
         os.write(master, value.encode()); pump()
-    def read(): return json.loads(path.read_text())
-    def menu(command, offset=0):
+    def read():
+        c = json.loads(path.read_text())
+        return next(t for t in c['teams'] if t['id'] == c['lastUsedTeamId'])
+    def menu(command, offset=2):
         before = read(); start = len(transcript)
         send('\x15' + command + '\r')
         wait(lambda: '追加副模型'.encode() in transcript[start:] or b'Select model' in transcript[start:])
@@ -57,8 +62,11 @@ with tempfile.TemporaryDirectory(prefix='cothink-model-switch-') as folder:
         wait(lambda: '选择模型'.encode() in transcript[start:])
         if offset: send('\x1b[B' * offset)
         send('\r')
-        wait(lambda: read() != before or '此协议要求'.encode() in transcript[start:])
-        if read() == before: send('1024\r')
+        wait(lambda: '保存为新 team'.encode() in transcript[start:] or '此协议要求'.encode() in transcript[start:])
+        if '此协议要求'.encode() in transcript[start:]: send('1024\r')
+        start = len(transcript); send('\x1b[B' * 4 + '\r')
+        wait(lambda: '新 team 名称'.encode() in transcript[start:])
+        send('切换-' + str(len(json.loads(path.read_text())['teams'])) + '\r')
         wait(lambda: read() != before)
         return before
     try:
@@ -69,7 +77,7 @@ with tempfile.TemporaryDirectory(prefix='cothink-model-switch-') as folder:
         menu('/model ')
         assert read()['secondary'] == [old, reviewer], 'alias discarded the previous primary or its settings'
         previous = read()['main']; menu('/models', 1)
-        assert read()['secondary'] == [previous, old, reviewer], 'canonical menu discarded a model'
+        assert read()['main'] == reviewer and read()['secondary'] == [old, previous], 'canonical promotion discarded a model or its settings'
         saved = path.read_bytes(); start = len(transcript)
         send('\x15/models\r'); wait(lambda: '追加副模型'.encode() in transcript[start:]); send('\x1b')
         time.sleep(.05); pump(); assert path.read_bytes() == saved, 'cancelling changed the roster'

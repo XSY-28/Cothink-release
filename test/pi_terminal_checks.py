@@ -1,6 +1,7 @@
 """Actual CoThink/Pi CLI on a PTY, local SSE provider only. This is not physical Terminal/IME acceptance."""
 import errno,fcntl,json,os,pty,select,signal,struct,subprocess,tempfile,termios,threading,time,shutil,re
 from pathlib import Path
+from helpers.team_fixture import team_config
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 ROOT=Path(__file__).resolve().parents[1];CLI=Path(os.environ.get('COTHINK_TEST_CLI',str(ROOT/'bin/cothink.js')));NODE=shutil.which('node')
 checks=[]
@@ -42,6 +43,7 @@ for scenario in os.environ.get('COTHINK_PTY_SCENARIOS','startup,settings,setting
    project.mkdir();(project/'base.txt').write_text('original')
    def git(*args):return subprocess.run(['git','-c','core.hooksPath=/dev/null','-c','commit.gpgsign=false','-c','user.name=fixture','-c','user.email=fixture@invalid',*args],cwd=project,capture_output=True,check=True)
    git('init','-b','main');git('status','--porcelain');git('add','--','base.txt');git('commit','-m','fixture base')
+  (home/'config.json').write_text(json.dumps(team_config(json.loads((home/'config.json').read_text()))))
   child=subprocess.Popen([NODE,str(CLI)],cwd=project if scenario=='work' else ROOT,stdin=slave,stdout=slave,stderr=slave,env=env,start_new_session=True);transcript=bytearray();deadline=time.monotonic()+18
   def pump():
    if time.monotonic()>deadline:raise AssertionError('PTY fixture watchdog '+scenario+'\n'+transcript.decode(errors='replace')[-6000:])

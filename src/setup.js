@@ -1,9 +1,10 @@
 import { copyFileSync, existsSync, readFileSync, chmodSync } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { saveConfig, validateConfig, credentials } from "./config.js";
+import { saveConfig, loadConfig, updateConfig, validateConfig, credentials } from "./config.js";
 import { createModelRuntime } from "./pi-runtime.js";
-import { privateDirectory, writePrivateJson } from "./storage.js";
+import { privateDirectory, writePrivateJson, writePrivateBytes } from "./storage.js";
+import { createTeamConfig, addTeam, normalizeTeamName } from "./teams.js";
 import { validateModelThinking } from "./thinking.js";
 export const nativeCommands = new Set([
   "settings",
@@ -29,7 +30,7 @@ export const nativeCommands = new Set([
   "quit",
 ]);
 export const nativeArgumentCommands = new Set(["thinking", "export", "import", "name", "login"]);
-export const hostLocalCommands = new Set(["chat", "models", "model", "help"]);
+export const hostLocalCommands = new Set(["chat", "team", "models", "model", "help"]);
 export const singleLineCommand = (text) => {
   const command = text.trim();
   return !/[\r\n]/.test(command) ? /^\/([^\s]*)(?:\s+([\s\S]*))?$/.exec(command) : null;
@@ -41,7 +42,7 @@ export function modelsAutocomplete(current) {
     async getSuggestions(lines, cursorLine, cursorCol, options) {
       const prefix = (lines[cursorLine] ?? "").slice(0, cursorCol);
       if (options.force) return current.getSuggestions(lines, cursorLine, cursorCol, options);
-      if (/^\s*\/models?[ \t]/.test(prefix)) return null;
+      if (/^\s*\/(?:models?|team)[ \t]/.test(prefix)) return null;
       const result = await current.getSuggestions(lines, cursorLine, cursorCol, options);
       if (!result || !/^\s*\/[^\s]*$/.test(prefix)) return result;
       const items = result.items.filter((item) => item.value !== "model" && item.value !== "/model");
@@ -89,116 +90,159 @@ export async function validateModelRefs(config, runtime, { singleModel = false }
   }
   return config;
 }
+export async function selectModelRef({ runtime, home, io, role, signal }) {
+  const providers = runtime
+    .getProviders()
+    .filter((p) => p.getModels().length)
+    .map((p) => ({ id: p.id, label: p.name ?? p.id }));
+  providers.push({ id: "custom", label: "自定义服务商" });
+  const provider = await io.select(`${role}服务商`, providers);
+  if (!provider) throw Error("已取消设置");
+  if (provider === "custom") {
+    const providerId = await io.prompt({ type: "text", message: "自定义配置 ID" }),
+      baseUrl = await io.prompt({ type: "text", message: "API 根地址" }),
+      api = await io.select("协议", [
+        { id: "openai-completions", label: "OpenAI Chat Completions" },
+        { id: "anthropic-messages", label: "Anthropic Messages" },
+      ]),
+      modelId = await io.prompt({ type: "text", message: "模型 ID" });
+    const url = new URL(baseUrl);
+    if (
+      !["https:", "http:"].includes(url.protocol) ||
+      url.username ||
+      url.password ||
+      url.search ||
+      url.hash
+    )
+      throw Error("服务地址无效");
+    const path = join(home, "pi", "models.json");
+    let models = { providers: {} };
+    if (existsSync(path)) models = JSON.parse(readFileSync(path, "utf8"));
+    if (models.providers?.[providerId]) throw Error("该服务商配置 ID 已存在，请使用现有服务商");
+    models.providers ??= {};
+    models.providers[providerId] = {
+      baseUrl,
+      api,
+      models: [
+        {
+          id: modelId,
+          name: modelId,
+          reasoning: false,
+          input: ["text"],
+          contextWindow: 32000,
+          maxTokens: 4096,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+        },
+      ],
+    };
+    writePrivateJson(path, models);
+    await runtime.refresh({ allowNetwork: false });
+    await runtime.login(providerId, "api_key", {
+      signal,
+      prompt: (p) => io.prompt(p),
+      notify: (e) => io.notify?.(e.message ?? e.url ?? ""),
+    });
+    return { provider: providerId, modelId };
+  }
+  const source = runtime.getProvider(provider);
+  if (!source) throw Error("服务商不可用");
+  if (!runtime.hasConfiguredAuth(provider)) {
+    const methods = ["api_key", "oauth"]
+      .filter((type) => source.auth?.[type === "api_key" ? "apiKey" : "oauth"]?.login)
+      .map((id) => ({ id, label: id === "api_key" ? "API Key（隐藏输入）" : "OAuth 登录" }));
+    if (!methods.length) throw Error("该服务商需要先配置其环境认证");
+    const auth = methods.length === 1 ? methods[0].id : await io.select("认证方式", methods);
+    await runtime.login(provider, auth, {
+      signal,
+      prompt: (p) => io.prompt(p),
+      notify: (e) => io.notify?.(e.message ?? e.url ?? ""),
+    });
+  }
+  const modelId = await io.select(
+    `${role}模型`,
+    runtime
+      .getModels(provider)
+      .filter((m) => !m.type || m.type === "chat")
+      .map((m) => ({ id: m.id, label: m.name ?? m.id })),
+  );
+  if (!modelId) throw Error("已取消设置");
+  const ref = { provider, modelId };
+  const model = runtime.getModel(provider, modelId);
+  if (model.api === "anthropic-messages")
+    ref.maxOutputTokens = Number(
+      await io.prompt({
+        type: "text",
+        message: `${model.api} 要求输出额度，请明确输入 maxOutputTokens`,
+      }),
+    );
+  return ref;
+}
+
+function configBytes(home) {
+  try { return readFileSync(join(home, "config.json"), "utf8"); }
+  catch (error) { if (error.code === "ENOENT") return null; throw error; }
+}
+function backupConfig(home, bytes) {
+  if (bytes === null) return;
+  privateDirectory(join(home, "backups"));
+  writePrivateBytes(join(home, "backups", `config-${randomUUID()}.json`), bytes);
+}
+async function teamName(io) {
+  const name = await io.prompt({ type: "text", message: "team 名称（1—80 字符）" });
+  if (name == null) throw Error("已取消设置");
+  return normalizeTeamName(name);
+}
+async function confirmTeam(io, team) {
+  io.notify?.(`team「${team.name}」：主 ${team.main.provider}/${team.main.modelId}；有序副模型 ${team.secondary.map(r => `${r.provider}/${r.modelId}`).join("、")}。普通纯答三次，/one纯答一次，工作调用次数不设上限。`);
+  if (io.select && (await io.select("确认保存 team", [{id:"save",label:"保存"},{id:"cancel",label:"取消"}])) !== "save")
+    throw Error("已取消设置，原配置保留。");
+}
+
 export async function setupModels({ home, modelRuntime, io, signal }) {
   const runtime = modelRuntime ?? (await createModelRuntime(home));
-  const config = { formatVersion: 2, main: null, secondary: [] };
-  const selectModel = async (role) => {
-    const providers = runtime
-      .getProviders()
-      .filter((p) => p.getModels().length)
-      .map((p) => ({ id: p.id, label: p.name ?? p.id }));
-    providers.push({ id: "custom", label: "自定义服务商" });
-    const provider = await io.select(`${role}服务商`, providers);
-    if (!provider) throw Error("已取消设置");
-    if (provider === "custom") {
-      const providerId = await io.prompt({ type: "text", message: "自定义配置 ID" }),
-        baseUrl = await io.prompt({ type: "text", message: "API 根地址" }),
-        api = await io.select("协议", [
-          { id: "openai-completions", label: "OpenAI Chat Completions" },
-          { id: "anthropic-messages", label: "Anthropic Messages" },
-        ]),
-        modelId = await io.prompt({ type: "text", message: "模型 ID" });
-      const url = new URL(baseUrl);
-      if (
-        !["https:", "http:"].includes(url.protocol) ||
-        url.username ||
-        url.password ||
-        url.search ||
-        url.hash
-      )
-        throw Error("服务地址无效");
-      const path = join(home, "pi", "models.json");
-      let models = { providers: {} };
-      if (existsSync(path)) models = JSON.parse(readFileSync(path, "utf8"));
-      if (models.providers?.[providerId]) throw Error("该服务商配置 ID 已存在，请使用现有服务商");
-      models.providers ??= {};
-      models.providers[providerId] = {
-        baseUrl,
-        api,
-        models: [
-          {
-            id: modelId,
-            name: modelId,
-            reasoning: false,
-            input: ["text"],
-            contextWindow: 32000,
-            maxTokens: 4096,
-            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-          },
-        ],
-      };
-      writePrivateJson(path, models);
-      await runtime.refresh({ allowNetwork: false });
-      await runtime.login(providerId, "api_key", {
-        signal,
-        prompt: (p) => io.prompt(p),
-        notify: (e) => io.notify?.(e.message ?? e.url ?? ""),
-      });
-      return { provider: providerId, modelId };
-    }
-    const source = runtime.getProvider(provider);
-    if (!source) throw Error("服务商不可用");
-    if (!runtime.hasConfiguredAuth(provider)) {
-      const methods = ["api_key", "oauth"]
-        .filter((type) => source.auth?.[type === "api_key" ? "apiKey" : "oauth"]?.login)
-        .map((id) => ({ id, label: id === "api_key" ? "API Key（隐藏输入）" : "OAuth 登录" }));
-      if (!methods.length) throw Error("该服务商需要先配置其环境认证");
-      const auth = methods.length === 1 ? methods[0].id : await io.select("认证方式", methods);
-      await runtime.login(provider, auth, {
-        signal,
-        prompt: (p) => io.prompt(p),
-        notify: (e) => io.notify?.(e.message ?? e.url ?? ""),
-      });
-    }
-    const modelId = await io.select(
-      `${role}模型`,
-      runtime
-        .getModels(provider)
-        .filter((m) => !m.type || m.type === "chat")
-        .map((m) => ({ id: m.id, label: m.name ?? m.id })),
-    );
-    if (!modelId) throw Error("已取消设置");
-    const ref = { provider, modelId };
-    const model = runtime.getModel(provider, modelId);
-    if (model.api === "anthropic-messages")
-      ref.maxOutputTokens = Number(
-        await io.prompt({
-          type: "text",
-          message: `${model.api} 要求输出额度，请明确输入 maxOutputTokens`,
-        }),
-      );
-    return ref;
-  };
-  config.main = await selectModel("主");
-  while (
-    (await io.select("添加副模型？（按追加顺序确定第一位问答评审）", [
-      { id: "no", label: "完成" },
-      { id: "yes", label: "添加" },
-    ])) === "yes"
-  ) {
-    config.secondary.push(await selectModel("副"));
-    validateConfig(config);
+  const before = configBytes(home);
+  const original = loadConfig(home);
+  const draft = { formatVersion: 2, main: await selectModelRef({runtime,home,io,role:"主",signal}), secondary: [] };
+  draft.secondary.push(await selectModelRef({runtime,home,io,role:"副",signal}));
+  validateConfig(draft);
+  while ((await io.select("添加副模型？（第一位为问答评审）", [
+    { id: "no", label: "完成" }, { id: "yes", label: "添加" },
+  ])) === "yes") {
+    draft.secondary.push(await selectModelRef({runtime,home,io,role:"副",signal}));
+    validateConfig(draft);
   }
-  validateConfig(config);
-  const oldPath = join(home, "config.json");
-  if (existsSync(oldPath)) {
-    privateDirectory(join(home, "backups"));
-    const path = join(home, "backups", `config-${randomUUID()}.json`);
-    copyFileSync(oldPath, path);
-    chmodSync(path, 0o600);
+  const name = await teamName(io), id = randomUUID();
+  await confirmTeam(io, {name,main:draft.main,secondary:draft.secondary});
+  return updateConfig(home, (current) => {
+    if (original?.formatVersion === 3 && current?.formatVersion === 3) {
+      const next = addTeam(current, {id,name,main:draft.main,secondary:draft.secondary});
+      next.lastUsedTeamId = id;
+      return next;
+    }
+    if (configBytes(home) !== before) throw Error("配置已变化，请刷新后重试。");
+    backupConfig(home, before);
+    return createTeamConfig({...(current?.formatVersion === 2 ? current : {}), ...draft}, name, id);
+  });
+}
+
+export async function migrateTeamConfig({ home, io, signal }) {
+  const before = configBytes(home), original = loadConfig(home);
+  if (original?.formatVersion === 3) return original;
+  if (original?.formatVersion !== 2) throw Error("请先显式导入旧配置。");
+  const draft = structuredClone(original);
+  if (!draft.secondary.length) {
+    io.notify?.("创建 team 需要至少一个副模型；取消保留旧配置，仍可 /one 使用。");
+    const runtime = await createModelRuntime(home);
+    draft.secondary.push(await selectModelRef({runtime,home,io,role:"副",signal}));
   }
-  saveConfig(home, config);
-  return config;
+  io.notify?.("为当前主模型与有序副模型命名；已有认证将继续复用。");
+  const name = await teamName(io), id = randomUUID();
+  await confirmTeam(io, {name,main:draft.main,secondary:draft.secondary});
+  return updateConfig(home, () => {
+    if (configBytes(home) !== before) throw Error("配置已变化，请刷新后重试。");
+    backupConfig(home, before);
+    return createTeamConfig(draft, name, id);
+  });
 }
 /** Explicit legacy import. Keys only go into Pi auth, not role config or diagnostics. */
 export async function importLegacyConfig({
@@ -207,7 +251,7 @@ export async function importLegacyConfig({
   env = process.env,
 }) {
   const legacy = validateConfig(JSON.parse(readFileSync(source, "utf8")));
-  if (legacy.formatVersion === 2) throw Error("源已经是 Pi 配置");
+  if ([2,3].includes(legacy.formatVersion)) throw Error("源已经是 Pi 配置");
   const keys = credentials(legacy, env);
   privateDirectory(join(home, "backups"));
   const backup = join(home, "backups", `legacy-${randomUUID()}.json`);

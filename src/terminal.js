@@ -262,6 +262,17 @@ export function setupIO(terminal, signal) {
   let muted=false;
   const output=new Writable({write(chunk,encoding,callback){if(!muted)terminal.output.write(chunk,encoding);callback();}});
   const rl=createInterface({input:terminal.input,output,terminal:true});
-  const prompt=async p=>{terminal.output.write(p.message+': ');muted=p.type==='secret';try{const value=await rl.question('',{signal: p.signal??signal});if(!value.trim())throw Error('设置已取消，旧配置保留。');return value.trim();}finally{if(muted)terminal.output.write('\n');muted=false;}};
+  const prompt=async p=>{
+    const hidden=p.type==='secret', label=p.message+': ';
+    // Readline redraws its own prompt. A separately written text label would
+    // be erased by question('') on real terminals (CSI 1G / CSI 0J).
+    if(hidden)terminal.output.write(label);
+    muted=hidden;
+    try{
+      const value=await rl.question(hidden?'':label,{signal:p.signal??signal});
+      if(!value.trim())throw Error('设置已取消，旧配置保留。');
+      return value.trim();
+    }finally{if(muted)terminal.output.write('\n');muted=false;}
+  };
   return {prompt,notify:text=>terminal.output.write(safeText(text)+'\n'),async select(title,options){terminal.output.write(`\n${title}\n`+options.map((o,i)=>`${i+1}. ${safeText(o.label)}`).join('\n')+'\n');const choice=await prompt({type:'text',message:'输入编号或 ID'});const option=options.find(o=>o.id===choice)??options[Number(choice)-1];if(!option)throw Error('无效选择，设置未切换。');return option.id;},close(){rl.close();}};
 }

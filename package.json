@@ -1,11 +1,12 @@
 {
   "name": "cothink-v2",
-  "version": "0.3.0-agent-sync.2",
+  "version": "0.4.0-team.2",
   "private": true,
   "files": [
     "bin/cothink.js",
     "src/cli.js",
     "src/config.js",
+    "src/teams.js",
     "src/context.js",
     "src/discussion.js",
     "src/interactive.js",

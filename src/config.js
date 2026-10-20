@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join, isAbsolute } from "node:path";
-import { privateDirectory, writePrivateJson } from "./storage.js";
+import { privateDirectory, writePrivateJson, acquireSessionWriter } from "./storage.js";
+import { validateTeamConfig } from "./teams.js";
 
 export function positiveInteger(value, name) {
   const number = Number(value);
@@ -14,6 +15,9 @@ export function positiveInteger(value, name) {
 }
 
 export function validateConfig(config) {
+  if (config?.formatVersion === 3) return validateTeamConfig(config);
+  if (config?.formatVersion !== undefined && config.formatVersion !== 2)
+    throw new Error("未知配置版本；原文件保留，请使用匹配版本。");
   if (config?.formatVersion === 2) {
     if (!config.main || !Array.isArray(config.secondary))
       throw new Error("新配置需要主模型和有序副模型列表。");
@@ -171,9 +175,30 @@ export function loadConfig(home) {
 }
 
 export function saveConfig(home, config) {
-  validateConfig(config);
-  privateDirectory(home);
-  writePrivateJson(join(home, "config.json"), config);
+  return updateConfig(home, (current) => {
+    if (current?.formatVersion === 3 && config.formatVersion !== 3)
+      throw new Error("不能用旧配置覆盖 team 配置；回退须显式保存备份。");
+    return config;
+  });
+}
+
+/** Short, synchronous read/change/validate/write; never hold this across UI input. */
+export function updateConfig(home, change) {
+  let writer;
+  try {
+    writer = acquireSessionWriter(join(home, "config-write"), "184df297-b389-43af-8635-e71dfac90f52");
+  } catch (error) {
+    if (error.code === "SESSION_BUSY") throw new Error("配置正在被其他实例修改，请重试。");
+    throw error;
+  }
+  try {
+    const next = change(structuredClone(loadConfig(home)));
+    if (next && typeof next.then === "function") throw new Error("配置变更必须同步完成。");
+    validateConfig(next);
+    privateDirectory(home);
+    writePrivateJson(join(home, "config.json"), next, writer.assertOwned);
+    return structuredClone(next);
+  } finally { writer.release(); }
 }
 
 /** Change roles without losing a model or its saved generation settings. */

@@ -7,11 +7,13 @@ import {
   initTheme,
 } from "@earendil-works/pi-coding-agent";
 import { Text, matchesKey } from "@earendil-works/pi-tui";
-import { createRuntime, selectedResources } from "./pi-runtime.js";
+import { randomUUID } from "node:crypto";
+import { createRuntime, createModelRuntime, selectedResources } from "./pi-runtime.js";
 import { runTurn } from "./discussion.js";
 import { cothinkExtension } from "./extensions/cothink.js";
 import { createClipboardWriter } from "./clipboard.js";
-import { saveConfig, switchMainModel } from "./config.js";
+import { loadConfig, updateConfig, switchMainModel } from "./config.js";
+import { addTeam, removeTeam, selectTeam, snapshotTeam, resolveTeamConfig, readSessionTeam, normalizeTeamName } from "./teams.js";
 import { readTask, readRequests } from "./task.js";
 import {
   projectMessage,
@@ -34,6 +36,8 @@ import {
   singleLineCommand,
   isGenerationCommand,
   modelsAutocomplete,
+  selectModelRef,
+  validateModelRefs,
 } from "./setup.js";
 export async function runInteractive({
   home,
@@ -41,6 +45,7 @@ export async function runInteractive({
   config,
   continueRecent = false,
   resume = false,
+  thinkingLevel,
   maxOutputTokens,
   timeout,
   terminal,
@@ -55,7 +60,47 @@ export async function runInteractive({
     draftRecovery,
     runAbort,
     currentSubmission;
-  const configState = { value: structuredClone(config) };
+  const initial = config.formatVersion === 3 ? resolveTeamConfig(config) : structuredClone(config);
+  if (thinkingLevel !== undefined) {
+    for (const ref of [initial.main, ...initial.secondary]) ref.thinkingLevel = thinkingLevel;
+    if (initial.team) initial.team = snapshotTeam({ ...initial.team, main: initial.main, secondary: initial.secondary });
+  }
+  const configState = { value: initial };
+  let managing = false;
+  const rosterKey = (c) => JSON.stringify([c.main, ...c.secondary].map(r => [r.provider, r.modelId]));
+  const modelLabel = (r) => `${r.provider}/${r.modelId}`;
+  const teamLabel = (t) => `${t.name} · ${modelLabel(t.main)} → ${t.secondary.map(modelLabel).join("、")}`;
+  const currentTeam = () => configState.value.team;
+  function refreshTeamStatus() {
+    const team = currentTeam();
+    const registered = team && loadConfig(home)?.teams?.some(t => t.id === team.id);
+    ui?.setStatus("cothink-team", team ? safeText(`team：${team.name}${registered ? "" : "（已从列表删除，仅当前阵容保留）"}`) : "此历史会话尚未绑定 team");
+    ui?.setWidget("cothink-budget", [budgetText(configState.value, false, {maxOutputTokens,timeout})]);
+  }
+  function rememberRecent(team) {
+    const latest = loadConfig(home);
+    if (latest?.formatVersion !== 3 || !team || !latest.teams.some(t => t.id === team.id)) return;
+    if (latest.lastUsedTeamId !== team.id) updateConfig(home, c => selectTeam(c, team.id));
+  }
+  function persistSelection(rt, team) {
+    rt.assertOwned();
+    if (JSON.stringify(readSessionTeam(rt.sessionManager.getBranch())) !== JSON.stringify(team)) {
+      try { rt.sessionManager.appendCustomEntry("cothink-team", {team: snapshotTeam(team)}); }
+      catch (error) {
+        rt.selectionError = "会话选择保存失败，请重新打开对话；草稿保留：" + error.message;
+        throw Error(rt.selectionError);
+      }
+    }
+  }
+  function sessionWriteIncomplete(rt) {
+    const path = rt.sessionManager.getSessionFile();
+    if (!path || !existsSync(path)) return false; // A new empty session is intentionally buffered.
+    try {
+      const entries = readFileSync(path, "utf8").split("\n").filter(Boolean).map(line => JSON.parse(line));
+      return !entries.some(entry => entry.id === rt.sessionManager.getLeafId());
+    } catch { return true; }
+  }
+
   const contexts = new WeakMap();
   const saveDraft = () => {
     if (!mode) return;
@@ -190,65 +235,171 @@ export async function runInteractive({
       },
     );
   }
-  async function modelsMenu() {
-    let c = structuredClone(configState.value);
-    const label = (r) => `${r.provider}/${r.modelId}`;
-    const action = await ui.select(
-      "模型设置（第一位副模型为问答评审，其余可参与工作）",
-      [
-        `主模型：${label(c.main)}`,
-        "追加副模型",
-        "删除副模型",
-        "重排副模型",
-        ...c.secondary.map((r, i) => `${i + 1}. ${label(r)}`),
-      ],
-    );
-    if (!action) return;
-    const choices = current.modelRuntime
-      .getModels()
-      .map((m) => `${m.provider}/${m.id}`);
-    if (action.startsWith("主模型：") || action === "追加副模型") {
-      const choice = await ui.select("选择模型（新认证请先 /login）", choices);
-      if (!choice) return;
-      const m = current.modelRuntime
-        .getModels()
-        .find((m) => `${m.provider}/${m.id}` === choice);
-      const ref = { provider: m.provider, modelId: m.id };
-      if (m.api === "anthropic-messages") {
-        const cap = await ui.input("此协议要求 maxOutputTokens，请明确额度");
-        if (!cap) return;
-        ref.maxOutputTokens = Number(cap);
+  async function applyTeamSelection(team) {
+    if (busy) throw Error("当前任务尚未结束，请先取消或等待。");
+    if (current.selectionError) throw Error(current.selectionError);
+    const selected = snapshotTeam(team), latest = loadConfig(home);
+    const next = resolveTeamConfig(latest, selected), before = configState.value;
+    if (!latest.teams.some(t => t.id === selected.id) && selected.id !== before.team?.id)
+      throw Error("team 已被其他实例删除，请刷新列表。");
+    await validateModelRefs(next, current.modelRuntime);
+    try {
+      current.assertOwned();
+      await current.selectModel(next.main);
+      persistSelection(current, selected);
+    } catch (error) {
+      // Pi appends to its in-memory tree before persistence. Never append a
+      // rollback node to a parent that failed to reach disk.
+      if (current.selectionError || sessionWriteIncomplete(current)) {
+        current.selectionError ??= "模型/会话记录保存失败，请重新打开对话；草稿保留：" + error.message;
+      } else {
+        try { current.assertOwned(); await current.selectModel(before.main); }
+        catch (restoreError) { current.selectionError = "模型恢复失败，请重新打开对话：" + restoreError.message; }
       }
-      if (action.startsWith("主模型：")) c = switchMainModel(c, ref);
-      else c.secondary.push(ref);
-    } else if (action === "删除副模型") {
-      const choice = await ui.select(
-        "删除后后位自然补位",
-        c.secondary.map(label),
-      );
-      if (!choice) return;
-      c.secondary.splice(
-        c.secondary.findIndex((r) => label(r) === choice),
-        1,
-      );
-    } else if (action === "重排副模型") {
-      const choice = await ui.select(
-        "选择移到第一位的副模型（将改变评审席位）",
-        c.secondary.map(label),
-      );
-      if (!choice) return;
-      const i = c.secondary.findIndex((r) => label(r) === choice);
-      c.secondary.unshift(...c.secondary.splice(i, 1));
-    } else return;
-    saveConfig(home, c);
-    configState.value = c;
-    notify("模型顺序已保存，将用于下一条任务。");
+      throw error;
+    }
+    current.effectiveConfig = configState.value = next;
+    current.needsTeam = false;
+    try { rememberRecent(selected); }
+    catch (error) { notify("当前对话已切换，新对话默认未更新：" + error.message, "warning"); }
+    refreshTeamStatus();
+    notify("当前 team：" + selected.name + "；从下一条任务生效。");
+  }
+  const modelIO = () => ({
+    async select(title, options) {
+      const labels = options.map(o => o.label);
+      const answer = await ui.select(safeText(title), labels.map(safeText));
+      return options[labels.map(safeText).indexOf(answer)]?.id;
+    },
+    async prompt(field) {
+      if (field.type === "secret") throw Error("新认证请先使用 /login，再创建 team；已有认证会复用。");
+      return ui.input(safeText(field.message ?? "请输入"));
+    },
+    notify(message) { notify(message); },
+  });
+  async function chooseModel(draft, role) {
+    const models = current.modelRuntime.getModels().filter(m => (!m.type || m.type === "chat") && current.modelRuntime.hasConfiguredAuth(m.provider));
+    const labels = models.map(m => `${m.provider}/${m.id}`);
+    const choice = await ui.select("选择模型（已有认证复用；新认证请先 /login）", [...labels, "配置服务商或模型"]);
+    if (!choice) return null;
+    if (choice === "配置服务商或模型")
+      return selectModelRef({runtime:current.modelRuntime,home,io:modelIO(),role});
+    const model = models[labels.indexOf(choice)];
+    const saved = [draft.main, ...draft.secondary, configState.value.main, ...configState.value.secondary,
+      ...(loadConfig(home)?.teams ?? []).flatMap(t => [t.main, ...t.secondary])]
+      .find(r => r && r.provider === model.provider && r.modelId === model.id);
+    const ref = structuredClone(saved ?? {provider:model.provider,modelId:model.id});
+    if (model.api === "anthropic-messages" && ref.maxOutputTokens == null) {
+      const cap = await ui.input("此协议要求 maxOutputTokens，请明确额度");
+      if (!cap) return null;
+      ref.maxOutputTokens = Number(cap);
+    }
+    return ref;
+  }
+  async function modelsMenu({selected, empty = false} = {}) {
+    if (busy || managing) { notify("当前任务或设置尚未结束，请先取消或等待。", "warning"); return; }
+    managing = true;
+    try {
+      let draft = structuredClone(configState.value);
+      const originalKey = rosterKey(draft);
+      if (empty) {
+        draft.secondary = [];
+        const main = await chooseModel(draft, "主"); if (!main) return;
+        draft.main = main;
+        const secondary = await chooseModel(draft, "副"); if (!secondary) return;
+        draft.secondary.push(secondary);
+      } else if (selected) draft = switchMainModel(draft, selected);
+      while (true) {
+        const action = await ui.select(
+          safeText(`阵容编辑 · 主 ${modelLabel(draft.main)} · 副 ${draft.secondary.map(modelLabel).join("、") || "未选（保存前至少一位）"}`),
+          [`主模型：${modelLabel(draft.main)}`, "追加副模型", "删除副模型", "重排副模型", "保存为新 team"],
+        );
+        if (!action) return;
+        if (action.startsWith("主模型：") || action === "追加副模型") {
+          const ref = await chooseModel(draft, action === "追加副模型" ? "副" : "主");
+          if (!ref) continue;
+          if (action.startsWith("主模型：")) draft = switchMainModel(draft, ref);
+          else draft.secondary.push(ref);
+        } else if (action === "删除副模型" || action === "重排副模型") {
+          const labels = draft.secondary.map(modelLabel);
+          const choice = await ui.select(action === "删除副模型" ? "移除后后位自然补位" : "移到第一位（改变问答评审）", labels);
+          if (!choice) continue;
+          const i = labels.indexOf(choice), [ref] = draft.secondary.splice(i,1);
+          if (action === "重排副模型") draft.secondary.unshift(ref);
+        } else if (action === "保存为新 team") {
+          if (!empty && currentTeam() && originalKey === rosterKey(draft)) { notify("阵容没有变化，未创建新 team。"); return; }
+          if (!draft.secondary.length) { notify("team 至少需要一个副模型。", "warning"); continue; }
+          const id = randomUUID();
+          while (true) {
+            const name = await ui.input("新 team 名称（另存，原 team 保留）");
+            if (name == null) return;
+            let team;
+            try {
+              team = {id,name:normalizeTeamName(name),main:draft.main,secondary:draft.secondary};
+              await validateModelRefs(draft, current.modelRuntime);
+              updateConfig(home, c => addTeam(c, team));
+            } catch (error) { notify(error.message, "error"); continue; }
+            try { await applyTeamSelection(team); }
+            catch (error) { notify("team 已保存，当前对话未切换：" + error.message, "error"); }
+            return;
+          }
+        }
+      }
+    } catch (error) { notify(error.message, "error"); }
+    finally { managing = false; }
+  }
+  async function teamMenu() {
+    if (managing) return;
+    try {
+      const config = loadConfig(home);
+      const action = await ui.select(safeText(`Team · ${currentTeam() ? teamLabel(currentTeam()) : "此历史会话尚未绑定 team"}`),
+        ["选择 team", "新建 team", "基于当前 team 调整", "删除 team"]);
+      if (!action) return;
+      if (busy) { notify("当前任务尚未结束，请先取消或等待；未更改 team。", "warning"); return; }
+      if (action === "新建 team") return await modelsMenu({empty:true});
+      if (action === "基于当前 team 调整") return await modelsMenu();
+      if (action === "选择 team") {
+        const labels = config.teams.map(t => safeText(teamLabel(t) + (t.id === currentTeam()?.id ? "（当前）" : "")));
+        const choice = await ui.select("选择 team（下一条生效）", labels);
+        if (!choice) return;
+        const team = config.teams[labels.indexOf(choice)];
+        if (team) await applyTeamSelection(team);
+      } else if (action === "删除 team") {
+        const labels = config.teams.map(t => safeText(teamLabel(t) + (config.teams.length <= 1 ? "（至少保留一个，不可删除）" : t.id === currentTeam()?.id ? "（当前，不可删除）" : "")));
+        const choice = await ui.select("删除 team（保留模型认证和历史）", labels);
+        if (!choice) return;
+        const target = config.teams[labels.indexOf(choice)];
+        if (!target) return;
+        const preview = removeTeam(loadConfig(home), {targetId:target.id,currentTeam:currentTeam()});
+        const nextDefault = preview.teams.find(t => t.id === preview.lastUsedTeamId);
+        const confirm = await ui.confirm(safeText(`删除 team「${target.name}」？`), safeText(`${teamLabel(target)}\n新对话默认：${nextDefault.name}；模型认证和历史保留。`));
+        if (!confirm) return;
+        if (busy) throw Error("当前任务尚未结束，未删除。");
+        updateConfig(home, c => removeTeam(c, {targetId:target.id,currentTeam:currentTeam()}));
+        notify("team 已删除，模型认证和历史保留。");
+        refreshTeamStatus();
+      }
+    } catch (error) { notify(error.message, "error"); }
   }
   async function create({
     cwd: targetCwd = cwd,
     agentDir = join(home, "pi"),
     sessionManager,
+    sessionStartEvent,
   } = {}) {
+    const fresh = !sessionManager || sessionStartEvent?.reason === "new";
+    const manager = sessionManager ?? SessionManager.create(targetCwd, join(agentDir,"sessions","main"));
+    const saved = readSessionTeam(manager.getBranch());
+    const latest = loadConfig(home) ?? config;
+    const inherited = saved ?? (fresh ? configState.value.team : null);
+    const effective = latest.formatVersion === 3 ? resolveTeamConfig(latest, inherited) : structuredClone(configState.value);
+    if (!inherited && !fresh) delete effective.team;
+    const catalog = await createModelRuntime(home);
+    const intended = effective.main;
+    const available = catalog.getModel(intended.provider,intended.modelId);
+    const fallback = available ?? catalog.getModels()[0];
+    if (!fallback) throw Error("模型目录为空；请先修复配置，history/show 仍可查看历史。");
+    const bootstrap = available ? intended : {provider:fallback.provider,modelId:fallback.id};
     const hostContext = {};
     let rt;
     const extension = (pi) => {
@@ -288,18 +439,30 @@ export async function runInteractive({
             return { cancel: true };
           }
         });
-      pi.on("session_tree", () => {
-        if (!busy) active = undefined;
+      pi.on("session_tree", async () => {
+        if (busy) return;
+        active = undefined;
+        const saved = readSessionTeam(rt.sessionManager.getBranch());
+        const latest = loadConfig(home);
+        rt.effectiveConfig = resolveTeamConfig(latest, saved);
+        if (!saved) delete rt.effectiveConfig.team;
+        rt.needsTeam = !saved;
+        configState.value = rt.effectiveConfig;
+        if (saved && rt.modelRuntime.getModel(saved.main.provider,saved.main.modelId)) await rt.selectModel(saved.main);
+        try { rememberRecent(saved); } catch(error) { notify(error.message,"warning"); }
+        refreshTeamStatus();
       });
-      pi.on("model_select", (event) => {
-        if (rt && !rt.applyingModel) {
-          const next = switchMainModel(configState.value, {
-            provider: event.model.provider,
-            modelId: event.model.id,
-          });
-          saveConfig(home, next);
-          configState.value = next;
-          notify("主模型选择已保存，用于下一条任务。");
+      pi.on("model_select", async (event) => {
+        if (!rt || rt.applyingModel || event.source === "restore") return;
+        const before = rt.effectiveConfig;
+        if (event.model.provider === before.main.provider && event.model.id === before.main.modelId) return;
+        try {
+          await rt.selectModel(before.main);
+          if (busy || managing) { notify("当前任务或设置尚未结束，已保留原 team。", "warning"); return; }
+          await modelsMenu({selected:{provider:event.model.provider,modelId:event.model.id}});
+        } catch(error) {
+          rt.selectionError = "模型恢复/选择失败，请重新打开对话：" + error.message;
+          notify(rt.selectionError,"error");
         }
       });
       pi.on("session_start", (_, ctx) => {
@@ -309,13 +472,14 @@ export async function runInteractive({
           data === "\x1b\r" ? { data: "\x1b[13;2u" } : undefined,
         );
         ui.setHeader(() => new Text("CoThink", 1, 0));
-        ui.setWidget("cothink-budget", [
-          budgetText(configState.value, false, { maxOutputTokens, timeout }),
-        ]);
+        if (rt) configState.value = rt.effectiveConfig;
+        refreshTeamStatus();
+        if (!available) notify("当前 team 的主模型不可用，请 /team 选择可用组合或修复模型配置；历史仍可查看。", "warning");
       });
       for (const [name, description, handler] of [
         ["chat", "查看完整讨论", showDetails],
-        ["models", "设置主模型和有序副模型", modelsMenu],
+        ["team", "选择、新建、调整或删除 team", teamMenu],
+        ["models", "设置主模型和有序副模型，另存 team", modelsMenu],
         [
           "one",
           "本条仅使用主模型",
@@ -330,11 +494,13 @@ export async function runInteractive({
     rt = await createRuntime({
       home,
       cwd: targetCwd,
-      modelRef: configState.value.main,
-      sessionManager,
+      modelRef: bootstrap,
+      modelRuntime: catalog,
+      sessionManager: manager,
+      sessionStartEvent,
       extensionFactories: [{ name: "cothink", factory: extension }],
       resourceOptions: {
-        ...selectedResources(configState.value, targetCwd),
+        ...selectedResources(effective, targetCwd),
         ...resourceOptions,
         systemPrompt: readFileSync(
           new URL("../prompts/main.md", import.meta.url),
@@ -344,6 +510,9 @@ export async function runInteractive({
       maxOutputTokens,
       timeout,
     });
+    rt.effectiveConfig = effective;
+    rt.needsTeam = !effective.team;
+    if (fresh && effective.team) persistSelection(rt, effective.team);
     rt.hostContext = (task) => {
       hostContext.task = task;
       hostContext.runtime = rt;
@@ -351,20 +520,32 @@ export async function runInteractive({
     contexts.set(rt.session, rt);
     rt.session.subscribe((event) => {
       const model = rt.session.model;
-      const main = configState.value.main;
+      const main = rt.effectiveConfig.main;
       if (
         event.type === "thinking_level_changed" &&
         !rt.applyingModel &&
+        current === rt &&
         model?.provider === main.provider &&
         model.id === main.modelId
       ) {
-        const next = structuredClone(configState.value);
+        if (busy || managing) {
+          rt.applyingModel = true;
+          try { rt.session.setThinkingLevel(main.thinkingLevel ?? "off"); }
+          finally { rt.applyingModel = false; }
+          return;
+        }
+        const next = structuredClone(rt.effectiveConfig);
         next.main.thinkingLevel = event.level;
-        saveConfig(home, next);
-        configState.value = next;
+        if (next.team) {
+          next.team = snapshotTeam({...next.team,main:next.main,secondary:next.secondary});
+          try { persistSelection(rt,next.team); }
+          catch(error) { notify(error.message,"error"); return; }
+        }
+        rt.effectiveConfig = configState.value = next;
+        refreshTeamStatus();
       }
     });
-    for (const name of ["chat", "models", "one"]) {
+    for (const name of ["chat", "team", "models", "one"]) {
       const owners = rt.services.resourceLoader
         .getExtensions()
         .extensions.filter((e) => e.commands.has(name));
@@ -392,11 +573,18 @@ export async function runInteractive({
         return;
       }
     }
-    if (busy) {
-      notify("当前任务尚未结束，草稿保留，不自动排队。", "warning");
+    if (busy || managing) {
+      notify("当前任务或设置尚未结束，草稿保留，不自动排队。", "warning");
       return;
     }
-    const snapshot = structuredClone(configState.value);
+    if (current.needsTeam) { notify("此历史会话尚未绑定 team，请先 /team 选择；未发送模型请求。","warning"); return; }
+    if (current.selectionError) { notify(current.selectionError,"error"); return; }
+    let snapshot;
+    try {
+      const latest = loadConfig(home);
+      snapshot = latest?.formatVersion === 3 ? resolveTeamConfig(latest, currentTeam()) : structuredClone(configState.value);
+      try { rememberRecent(snapshot.team); } catch(error) { notify("本条仍使用当前 team，新对话默认未更新："+error.message,"warning"); }
+    } catch(error) { notify(error.message,"error"); return; }
     busy = true;
     runAbort = new AbortController();
     active = undefined;
@@ -459,6 +647,7 @@ export async function runInteractive({
     ? SessionManager.continueRecent(cwd, join(home, "pi", "sessions", "main"))
     : undefined;
   current = await create({ sessionManager: manager });
+  configState.value = current.effectiveConfig;
   const runtimeHost = new AgentSessionRuntime(
     current.session,
     current.services,
@@ -476,7 +665,7 @@ export async function runInteractive({
   const copyText = createClipboardWriter();
   const host = {
     submit: trackedSubmit,
-    isBusy: () => busy,
+    isBusy: () => busy || managing,
     cancel,
     showDetails,
     project: (message) => projectMessage(home, message),
@@ -496,18 +685,19 @@ export async function runInteractive({
       }
       if (
         !text.includes("\n") &&
-        ["/chat", "/changelog", "/models", "/model", "/one", "/help"].includes(
+        ["/chat", "/changelog", "/team", "/models", "/model", "/one", "/help"].includes(
           text.trim(),
         )
       ) {
         if (text.trim() === "/chat") await showDetails();
         else if (text.trim() === "/changelog") await showChangelog();
+        else if (name === "team") await teamMenu();
         else if (name === "models" || name === "model") await modelsMenu();
         else
           notify(
             text.trim() === "/one"
               ? "用法：/one <任务>"
-              : "/one 本条单模型；/models 设置；/chat 或 Ctrl+O 详情；/changelog 更新记录；Esc / Ctrl+C 取消；/new /resume /fork /tree /reload 复用 Pi。",
+              : "/one 本条单模型；/team 管理组合；/models 设置阵容；/chat 或 Ctrl+O 详情；/changelog 更新记录；Esc / Ctrl+C 取消；/new /resume /fork /tree /reload 复用 Pi。",
           );
         mode.editor.setText("");
         return false;
@@ -566,6 +756,10 @@ export async function runInteractive({
       active = undefined;
       busy = false;
       if (!current) throw Error("Pi session 未绑定 CoThink runtime");
+      configState.value = current.effectiveConfig;
+      current.needsTeam = !configState.value.team;
+      try { rememberRecent(configState.value.team); } catch(error) { notify("新对话默认未更新："+error.message,"warning"); }
+      refreshTeamStatus();
       restoreDraft();
     },
     async beforeExit() {

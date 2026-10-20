@@ -18,6 +18,7 @@ import {
   isGenerationCommand,
 } from "./setup.js";
 import { cothinkExtension } from "./extensions/cothink.js";
+import { snapshotTeam, readSessionTeam } from "./teams.js";
 import { validateConfig } from "./config.js";
 const prompt = (name) =>
   readFileSync(new URL(`../prompts/${name}.md`, import.meta.url), "utf8");
@@ -38,6 +39,10 @@ export async function runTurn({
   singleModel = singleModel || parsed.singleModel;
   if (!input.trim()) throw Error("问题不能为空");
   const frozen = structuredClone(config);
+  if (options.maxOutputTokens !== undefined) {
+    for (const ref of [frozen.main, ...frozen.secondary]) ref.maxOutputTokens = options.maxOutputTokens;
+  }
+  if (frozen.team) frozen.team = snapshotTeam({ ...frozen.team, main: frozen.main, secondary: frozen.secondary });
   validateConfig(frozen);
   const catalog = mainRuntime?.modelRuntime ?? (await createModelRuntime(home));
   await validateModelRefs(frozen, catalog, { singleModel });
@@ -75,9 +80,14 @@ export async function runTurn({
       throw Error(
         "本地或未知命令不能作为问题提交；请在交互界面使用本地命令。未发送模型请求。",
       );
+    if (frozen.team && JSON.stringify(readSessionTeam(manager.getBranch())) !== JSON.stringify(frozen.team)) {
+      rt.assertOwned();
+      manager.appendCustomEntry("cothink-team", { team: frozen.team });
+    }
     task = createTask({
       home,
       input,
+      team: frozen.team,
       models: {
         main: frozen.main,
         secondary: singleModel ? [] : frozen.secondary.slice(0, 1),

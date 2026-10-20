@@ -1,3 +1,4 @@
+import { snapshotTeam } from "./teams.js";
 import { randomUUID } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
@@ -15,6 +16,7 @@ export function createTask({
   home,
   input,
   models,
+  team,
   singleModel = false,
   sessionId = null,
   branchId = null,
@@ -32,6 +34,7 @@ export function createTask({
     input,
     singleModel,
     models: structuredClone(models),
+    ...(team ? { team: snapshotTeam(team) } : {}),
     sessionId,
     branchId,
     mode: "answer",

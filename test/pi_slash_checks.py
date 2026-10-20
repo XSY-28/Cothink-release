@@ -1,6 +1,7 @@
 """Local-command regression through actual CLI/PTY; no paid providers or physical-terminal claims."""
 import errno, fcntl, json, os, pty, select, signal, struct, subprocess, tempfile, termios, threading, time
 from pathlib import Path
+from helpers.team_fixture import team_config
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -49,7 +50,7 @@ with tempfile.TemporaryDirectory(prefix='cothink-slash-') as folder:
     checks.append({'boundary': 'unadapted extension rejected before import', 'calls': 0})
     config = json.loads((home / 'config.json').read_text())
     config['piResources'].pop('extensions')
-    (home / 'config.json').write_text(json.dumps(config))
+    (home / 'config.json').write_text(json.dumps(team_config(config)))
     child = subprocess.Popen(['node', str(CLI)], cwd=home, stdin=slave, stdout=slave, stderr=slave, env=env, start_new_session=True)
     transcript = bytearray()
     def pump():
@@ -76,7 +77,7 @@ with tempfile.TemporaryDirectory(prefix='cothink-slash-') as folder:
         checks.append({'input': text, 'calls': 0, 'tasks': 0})
     try:
         wait(lambda: '预算：纯答'.encode() in transcript)
-        for name in ['settings', 'scoped-models', 'copy', 'session', 'changelog', 'hotkeys', 'fork', 'clone', 'tree', 'trust', 'logout', 'new', 'reload', 'debug', 'resume', 'quit', 'chat', 'models', 'model', 'help']:
+        for name in ['settings', 'scoped-models', 'copy', 'session', 'changelog', 'hotkeys', 'fork', 'clone', 'tree', 'trust', 'logout', 'new', 'reload', 'debug', 'resume', 'quit', 'chat', 'team', 'models', 'model', 'help']:
             command('/' + name + ' unexpected', '/' + ('models' if name == 'model' else name) + ' 不接受参数')
         for text in ['/setting', '/unknown arg', '/skill:missing arg', '/MODEL main', '/', '/share', '/bug', '/arminsayshi', '/dementedelves', '/compact arg']:
             command(text, '未发送' if text != '/compact arg' else '尚未')
@@ -99,7 +100,7 @@ with tempfile.TemporaryDirectory(prefix='cothink-slash-') as folder:
         before_calls = len(calls)
         os.write(master, b'\x15/one pending question\r')
         wait(lambda: len(calls) == before_calls + 1)
-        for text in ['/new', '/settings', '/models', '/model', '/unknown', '/local-test busy']:
+        for text in ['/new', '/settings', '/team', '/models', '/model', '/unknown', '/local-test busy']:
             start = len(transcript)
             os.write(master, ('\x15' + text + '\r').encode())
             wait(lambda: '任务仍在运行'.encode() in transcript[start:])

@@ -3,7 +3,8 @@ import { homedir } from "node:os";
 import { resolve, join } from "node:path";
 import { existsSync, readFileSync } from "node:fs";
 import { loadConfig, positiveInteger } from "./config.js";
-import { setupModels, importLegacyConfig, parseTurnInput } from "./setup.js";
+import { setupModels, migrateTeamConfig, importLegacyConfig, parseTurnInput } from "./setup.js";
+import { resolveTeamConfig } from "./teams.js";
 import { runTurn } from "./discussion.js";
 import { listTasks, readTask } from "./task.js";
 import { listRuns, readRun } from "./storage.js";
@@ -22,7 +23,7 @@ import {
 } from "./terminal.js";
 const help = `CoThink
 用法：cothink | cothink -c | cothink -r
-  cothink init                       选择服务商、Pi 认证、主模型、有序副模型
+  cothink init                       选择主副模型、复用 Pi 认证并命名 team
   cothink init --import-legacy        显式备份并导入旧配置（不生成）
   cothink [ask] [--one] [--all|--json] [问题]
   cothink history [--json] | cothink show ID [--all|--json]
@@ -32,7 +33,7 @@ const help = `CoThink
 /chat 或 Ctrl+O 查看完整讨论；Esc 返回。Esc / Ctrl+C 取消整条任务。
 /changelog 查看随安装包提供的 CoThink 完整更新记录；升级后首次启动显示摘要。
 /new /resume /fork /tree /reload 复用 Pi；运行时拒绝切换并保留草稿。
-/模型命令：/models 主副模型设置，/login /logout 认证，/thinking 实际支持档位。
+/team 选择、新建、调整、删除组合；/models 编辑阵容并另存 team；/login /logout 认证，/thinking 实际支持档位。
 Enter 发送，Shift+Enter / Ctrl+J 换行；多行粘贴保留。至少 40×12。
 无自动重试、压缩或预热；无默认本地模型超时或可省略输出额度上限。
 工作使用 agent-sync 独立快照；文件原子编辑、隔离Shell、最新组合检查后接纳，原目录保持原样。\n/one 工作可独自使用工具，不委派；work 配置可声明固定检查策略。
@@ -160,14 +161,20 @@ export async function main(args = process.argv.slice(2)) {
       }
       return 0;
     }
+    const tty = Boolean(process.stdin.isTTY && process.stdout.isTTY && process.env.COTHINK_NO_TTY !== "1");
     if (values["import-legacy"]) {
       if (command !== "init") throw Error("--import-legacy 仅用于 init");
       await importLegacyConfig({ home });
+      if (tty) {
+        terminal = openTerminal(); io = setupIO(terminal, controller.signal);
+        await migrateTeamConfig({ home, io, signal: controller.signal });
+        io.close(); io = null; terminal.close(); terminal = null;
+      }
       process.stderr.write("旧配置已私有备份并导入 Pi；未发送生成请求。\n");
       return 0;
     }
     let config = loadConfig(home);
-    if (config && config.formatVersion !== 2 && command !== "init")
+    if (config && ![2, 3].includes(config.formatVersion) && command !== "init")
       throw Error(
         "检测到旧配置。请运行 cothink init --import-legacy 显式备份导入，或 cothink init 重新设置；history/show 仍可只读查看。",
       );
@@ -175,7 +182,9 @@ export async function main(args = process.argv.slice(2)) {
       terminal = openTerminal();
       if (!terminal) throw Error("首次配置需要交互终端，请运行 cothink init。");
       io = setupIO(terminal, controller.signal);
-      config = await setupModels({ home, io, signal: controller.signal });
+      config = config?.formatVersion === 2
+        ? await migrateTeamConfig({ home, io, signal: controller.signal })
+        : await setupModels({ home, io, signal: controller.signal });
       io.close();
       io = null;
       terminal.close();
@@ -191,15 +200,7 @@ export async function main(args = process.argv.slice(2)) {
         ? undefined
         : positiveInteger(values.timeout, "超时");
     if (timeout > 2147483647) throw Error("超时超过 Node 定时器范围");
-    if (values.thinking !== undefined) {
-      config = structuredClone(config);
-      for (const ref of [config.main, ...config.secondary])
-        ref.thinkingLevel = values.thinking;
-    }
-    const tty =
-      process.stdin.isTTY &&
-      process.stdout.isTTY &&
-      process.env.COTHINK_NO_TTY !== "1";
+
     if (
       (values.continue || values.resume) &&
       (!tty || positionals.length || values.json || values.all || values.print)
@@ -214,6 +215,11 @@ export async function main(args = process.argv.slice(2)) {
       !values.print &&
       args[0] !== "ask"
     ) {
+      if (config.formatVersion === 2) {
+        terminal = openTerminal(); io = setupIO(terminal, controller.signal);
+        config = await migrateTeamConfig({ home, io, signal: controller.signal });
+        io.close(); io = null; terminal.close(); terminal = null;
+      }
       process.off("SIGINT", onInt);
       process.off("SIGTERM", onTerm);
       const { runInteractive } = await import("./interactive.js");
@@ -222,9 +228,16 @@ export async function main(args = process.argv.slice(2)) {
         config,
         continueRecent: values.continue,
         resume: values.resume,
+        thinkingLevel: values.thinking,
         maxOutputTokens,
         timeout,
       });
+    }
+    if (config.formatVersion === 3) config = resolveTeamConfig(config);
+    else process.stderr.write("旧 v2 阵容仅用于本条；请稍后运行 cothink init 命名升级 team。\n");
+    if (values.thinking !== undefined) {
+      config = structuredClone(config);
+      for (const ref of [config.main, ...config.secondary]) ref.thinkingLevel = values.thinking;
     }
     let input = positionals.join(" ");
     if (!positionals.length) {
