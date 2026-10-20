@@ -271,7 +271,7 @@ function dataIdentities(kind, path, cwd, home) {
 }
 // Same command namespace as the native host, including its hidden compatibility alias.
 const localNames = new Set(
-  "one chat team models model help settings scoped-models thinking export import copy name session changelog hotkeys fork clone tree trust login logout new reload debug resume quit compact install list remove update uninstall config".split(
+  "one cothink chat team models model help settings scoped-models thinking export import copy name session changelog hotkeys fork clone tree trust login logout new reload debug resume quit compact install list remove update uninstall config".split(
     " ",
   ),
 );

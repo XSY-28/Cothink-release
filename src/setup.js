@@ -30,7 +30,7 @@ export const nativeCommands = new Set([
   "quit",
 ]);
 export const nativeArgumentCommands = new Set(["thinking", "export", "import", "name", "login"]);
-export const hostLocalCommands = new Set(["chat", "team", "models", "model", "help"]);
+export const hostLocalCommands = new Set(["chat", "team", "models", "model", "help", "cothink"]);
 export const singleLineCommand = (text) => {
   const command = text.trim();
   return !/[\r\n]/.test(command) ? /^\/([^\s]*)(?:\s+([\s\S]*))?$/.exec(command) : null;
@@ -70,7 +70,7 @@ export function parseTurnInput(text) {
     if (nativeCommands.has(command[1]) || hostLocalCommands.has(command[1]) || command[1] === "compact")
       return { local: true, message: "本地命令请在 CoThink 交互界面使用；未发送模型请求。" };
     if (text.trim() === "/one")
-      return { local: true, message: "用法：/one <任务>；仅本条使用主模型。" };
+      return { local: true, message: "请在交互界面使用 /one 切换单模型模式；一次性入口使用 /one <任务> 或 --one。未发送模型请求。" };
     if (/^\/one[ \t]+/.test(text.trimStart()))
       return { input: text.trimStart().replace(/^\/one[ \t]+/, ""), singleModel: true };
   }

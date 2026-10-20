@@ -36,6 +36,7 @@ import {
   singleLineCommand,
   isGenerationCommand,
   modelsAutocomplete,
+  parseTurnInput,
   selectModelRef,
   validateModelRefs,
 } from "./setup.js";
@@ -54,6 +55,7 @@ export async function runInteractive({
   let current,
     active,
     busy = false,
+    turnSingleModel = false,
     closed = false,
     mode,
     ui,
@@ -71,11 +73,48 @@ export async function runInteractive({
   const modelLabel = (r) => `${r.provider}/${r.modelId}`;
   const teamLabel = (t) => `${t.name} · ${modelLabel(t.main)} → ${t.secondary.map(modelLabel).join("、")}`;
   const currentTeam = () => configState.value.team;
+  function readSessionMode(manager) {
+    const entry = manager.getBranch().findLast(e => e.type === "custom" && e.customType === "cothink-mode");
+    if (!entry) return false;
+    if (typeof entry.data?.singleModel !== "boolean") throw Error("会话模式记录损坏；请保留原记录并修复。");
+    return entry.data.singleModel;
+  }
+  function refreshModeStatus(singleModel = current?.singleModel ?? false) {
+    ui?.setWidget("cothink-budget", [
+      (busy ? "当前任务 · " : "") + budgetText(configState.value, busy ? turnSingleModel : singleModel, {maxOutputTokens, timeout}),
+    ]);
+    ui?.setWidget("cothink-mode", [
+      `模式：${singleModel ? "ONE · 单模型" : "COTHINK · 讨论"}${busy ? "（下一条）" : ""}`,
+    ], {placement: "belowEditor"});
+  }
+  function switchMode(singleModel) {
+    if (managing) { notify("当前设置尚未结束，未切换模式。", "warning"); return false; }
+    if (current.selectionError) { notify(current.selectionError, "error"); return false; }
+    if (current.singleModel !== singleModel) {
+      const manager = current.sessionManager, previous = manager.getLeafId();
+      try {
+        current.assertOwned();
+        manager.appendCustomEntry("cothink-mode", {singleModel});
+      } catch (error) {
+        // Pi advances the in-memory leaf before append. Keep later cancellation
+        // records attached to the last known parent, never to an unsaved marker.
+        if (previous) manager.branch(previous); else manager.resetLeaf();
+        current.selectionError = "模式保存失败，请重新打开对话；草稿保留：" + error.message;
+        runAbort?.abort();
+        notify(current.selectionError, "error");
+        return false;
+      }
+      current.singleModel = singleModel;
+    }
+    refreshModeStatus();
+    notify(`当前为${singleModel ? "单模型" : "讨论"}模式；从下一条任务生效。`);
+    return true;
+  }
   function refreshTeamStatus() {
     const team = currentTeam();
     const registered = team && loadConfig(home)?.teams?.some(t => t.id === team.id);
     ui?.setStatus("cothink-team", team ? safeText(`team：${team.name}${registered ? "" : "（已从列表删除，仅当前阵容保留）"}`) : "此历史会话尚未绑定 team");
-    ui?.setWidget("cothink-budget", [budgetText(configState.value, false, {maxOutputTokens,timeout})]);
+    refreshModeStatus();
     if(current?.packageError) ui?.setStatus("cothink-packages", safeText(current.packageError.message));
   }
   function rememberRecent(team) {
@@ -390,6 +429,7 @@ export async function runInteractive({
   } = {}) {
     const fresh = !sessionManager || sessionStartEvent?.reason === "new";
     const manager = sessionManager ?? SessionManager.create(targetCwd, join(agentDir,"sessions","main"));
+    const singleModel = fresh ? false : readSessionMode(manager);
     const saved = readSessionTeam(manager.getBranch());
     const latest = loadConfig(home) ?? config;
     const inherited = saved ?? (fresh ? configState.value.team : null);
@@ -448,6 +488,7 @@ export async function runInteractive({
         rt.effectiveConfig = resolveTeamConfig(latest, saved);
         if (!saved) delete rt.effectiveConfig.team;
         rt.needsTeam = !saved;
+        rt.singleModel = readSessionMode(rt.sessionManager);
         configState.value = rt.effectiveConfig;
         if (saved && rt.modelRuntime.getModel(saved.main.provider,saved.main.modelId)) await rt.selectModel(saved.main);
         try { rememberRecent(saved); } catch(error) { notify(error.message,"warning"); }
@@ -475,6 +516,7 @@ export async function runInteractive({
         ui.setHeader(() => new Text("CoThink", 1, 0));
         if (rt) configState.value = rt.effectiveConfig;
         refreshTeamStatus();
+        refreshModeStatus(rt?.singleModel ?? singleModel);
         if (!available) notify("当前 team 的主模型不可用，请 /team 选择可用组合或修复模型配置；历史仍可查看。", "warning");
       });
       for (const [name, description, handler] of [
@@ -483,12 +525,13 @@ export async function runInteractive({
         ["models", "设置主模型和有序副模型，另存 team", modelsMenu],
         [
           "one",
-          "本条仅使用主模型",
+          "进入单模型模式；/one <任务> 仅本条",
           async (args) => {
             if (args) await trackedSubmit("/one " + args);
-            else notify("用法：/one <任务>");
+            else switchMode(true);
           },
         ],
+        ["cothink", "回到讨论模式", async () => switchMode(false)],
       ])
         pi.registerCommand(name, { description, handler });
     };
@@ -514,6 +557,7 @@ export async function runInteractive({
     });
     if (rt.packageError) notify(rt.packageError.message + "；历史和 /team 仍可使用，新生成已阻断。", "warning");
     rt.effectiveConfig = effective;
+    rt.singleModel = singleModel;
     rt.needsTeam = !effective.team;
     if (fresh && effective.team) persistSelection(rt, effective.team);
     rt.hostContext = (task) => {
@@ -548,7 +592,7 @@ export async function runInteractive({
         refreshTeamStatus();
       }
     });
-    for (const name of ["chat", "team", "models", "one"]) {
+    for (const name of ["chat", "team", "models", "one", "cothink"]) {
       const owners = rt.services.resourceLoader
         .getExtensions()
         .extensions.filter((e) => e.commands.has(name));
@@ -589,6 +633,9 @@ export async function runInteractive({
       try { rememberRecent(snapshot.team); } catch(error) { notify("本条仍使用当前 team，新对话默认未更新："+error.message,"warning"); }
     } catch(error) { notify(error.message,"error"); return; }
     busy = true;
+    const singleModel = current.singleModel || parseTurnInput(text).singleModel;
+    turnSingleModel = singleModel;
+    refreshModeStatus();
     runAbort = new AbortController();
     active = undefined;
     const draft = mode?.editor.getExpandedText?.() ?? text;
@@ -600,6 +647,7 @@ export async function runInteractive({
         cwd: current.services.cwd,
         input: text,
         config: snapshot,
+        singleModel,
         mainRuntime: current,
         signal: runAbort.signal,
         maxOutputTokens,
@@ -637,6 +685,7 @@ export async function runInteractive({
       notify(e.message, "error");
     } finally {
       busy = false;
+      refreshModeStatus();
       current.unbindTask();
       ui?.setStatus(
         "cothink-task",
@@ -689,7 +738,7 @@ export async function runInteractive({
       }
       if (
         !text.includes("\n") &&
-        ["/chat", "/changelog", "/team", "/models", "/model", "/one", "/help"].includes(
+        ["/chat", "/changelog", "/team", "/models", "/model", "/one", "/cothink", "/help"].includes(
           text.trim(),
         )
       ) {
@@ -697,11 +746,12 @@ export async function runInteractive({
         else if (text.trim() === "/changelog") await showChangelog();
         else if (name === "team") await teamMenu();
         else if (name === "models" || name === "model") await modelsMenu();
+        else if (name === "one" || name === "cothink") {
+          if (!switchMode(name === "one")) return false;
+        }
         else
           notify(
-            text.trim() === "/one"
-              ? "用法：/one <任务>"
-              : "/one 本条单模型；/team 管理组合；/models 设置阵容；/chat 或 Ctrl+O 详情；/changelog 更新记录；Esc / Ctrl+C 取消；/new /resume /fork /tree /reload 复用 Pi。",
+            "/one 进入单模型模式；/cothink 回到讨论模式；/one <任务> 仅本条；/team 管理组合；/models 设置阵容；/chat 或 Ctrl+O 详情；/changelog 更新记录；Esc / Ctrl+C 取消；/new /resume /fork /tree /reload 复用 Pi。",
           );
         mode.editor.setText("");
         return false;

@@ -31,7 +31,8 @@ const help = `CoThink
   cothink install npm:包名 | cothink list | cothink remove npm:包名 [--json]
   cothink migrate-work 项目路径 [--rollback] [--json]  显式旧格式迁移/无新接纳时回退
   cat question.txt | cothink
-/one <任务>：仅本条使用主模型；纯答一次。默认第一位副模型评审，主模型修订，共三次。
+交互中 /one 进入单模型模式，/cothink 回到讨论模式；输入框附近显示当前模式。
+/one <任务> 或 --one：仅本条使用主模型。单模型纯答一次；讨论纯答由第一位副模型评审、主模型修订，共三次。
 /chat 或 Ctrl+O 查看完整讨论；Esc 返回。Esc / Ctrl+C 取消整条任务。
 /changelog 查看随安装包提供的 CoThink 完整更新记录；升级后首次启动显示摘要。
 /new /resume /fork /tree /reload 复用 Pi；运行时拒绝切换并保留草稿。
