@@ -4,13 +4,13 @@ CoThink 是一个多模型协作工具，旨在让不同模型组成团队，通
 
 CoThink 基于 Pi 开发，可复用 Pi 社区的技能（Skills）、提示模板和主题。其他插件需完成兼容适配后使用，具体范围见下方的[包管理说明](#安装和查看-pi-资源包)。
 
-项目仍在早期预览阶段，支持 macOS，Windows 提供 x64 / ARM64 下载包，也还存在一些 bug 和不完善之处。欢迎通过 [Issues](https://github.com/XSY-28/Cothink-release/issues) 反馈问题、分享使用体验或提出改进建议。
+项目仍在早期预览阶段，支持 macOS 与 Windows（x64 / ARM64），可通过 npm 安装；Windows 也提供 ZIP 下载包。项目仍有一些 bug 和不完善之处。欢迎通过 [Issues](https://github.com/XSY-28/Cothink-release/issues) 反馈问题、分享使用体验或提出改进建议。
 
 ## 安装与启动
 
 需要 Node.js ≥22.19、npm 和 Git。
 
-`0.6.0-windows.2` 已提交 npm，正在等待 registry 后台校验完成；默认安装目前仍可能得到旧版。Windows 可先使用下方已公开的 ZIP。
+当前 npm `latest` 为 `0.6.0-windows.2`。Windows Terminal + PowerShell 的命令见下方[安装说明](#windows-通过-npm-安装)。
 
 安装最新版：
 

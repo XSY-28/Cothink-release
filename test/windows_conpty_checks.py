@@ -104,8 +104,16 @@ try:
     proc.write('/one\r')
     wait_for(lambda: 'ONE' in transcript, 'local mode switch')
     proc.write('CtrlJ\n第二行\r')
+    snapshot_busy = 0
     def completed():
-        rows = [json.loads(p.read_text(encoding='utf-8')) for p in (home / 'tasks').glob('*.json')]
+        global snapshot_busy
+        try:
+            rows = [json.loads(p.read_text(encoding='utf-8')) for p in (home / 'tasks').glob('*.json')]
+        except PermissionError:
+            # Windows can deny an open while Node atomically replaces the snapshot.
+            # Re-observe within wait_for's original deadline; persistent denial fails.
+            snapshot_busy += 1
+            return False
         return len(rows) == 2 and all(r['status'] == 'completed' for r in rows)
     wait_for(completed, 'single model multiline input')
     rows = [json.loads(p.read_text(encoding='utf-8')) for p in (home / 'tasks').glob('*.json')]
@@ -113,7 +121,7 @@ try:
     proc.write('/quit\r')
     wait_for(lambda: not proc.isalive(), 'clean exit')
     print(json.dumps({'conpty': True, 'consoleReopen': True, 'tasks': 2, 'chineseMultiline': True,
-                      'details': True, 'modeSwitch': True, 'realGenerations': 0}))
+                      'details': True, 'modeSwitch': True, 'snapshotBusyObservations': snapshot_busy, 'realGenerations': 0}))
 finally:
     if proc.isalive():
         proc.terminate(force=True)
