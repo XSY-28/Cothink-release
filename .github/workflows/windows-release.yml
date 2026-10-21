@@ -30,33 +30,48 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           npm.cmd run test:windows
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-      - name: Build and install the actual download
+      - name: Pack the exact release archive
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force dist | Out-Null
-          $pack = npm.cmd pack --ignore-scripts --json --pack-destination dist | ConvertFrom-Json
+          npm.cmd pack --ignore-scripts --json --pack-destination dist | Set-Content -Encoding utf8 dist/pack.json
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $pack = Get-Content -Raw dist/pack.json | ConvertFrom-Json
           node scripts/windows-release.mjs "dist/$($pack[0].filename)"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           $folder = (Get-ChildItem dist -Directory -Filter 'CoThink-*').FullName
-          # The user-facing cmd launchers must work in a path with spaces and Chinese.
+          "COTHINK_DOWNLOAD_FOLDER=$folder" >> $env:GITHUB_ENV
+      - name: Install the user download with an empty cache
+        shell: pwsh
+        run: |
           $install = Join-Path $env:RUNNER_TEMP 'CoThink 中文 test'
-          Copy-Item $folder $install -Recurse
+          Copy-Item $env:COTHINK_DOWNLOAD_FOLDER $install -Recurse
+          $env:npm_config_cache = Join-Path $env:RUNNER_TEMP 'cothink-empty-npm-cache'
+          New-Item -ItemType Directory $env:npm_config_cache | Out-Null
           & "$install/install.cmd"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           & "$install/cothink.cmd" --version
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           $package = Join-Path $install 'app/node_modules/cothink-v2'
+          "COTHINK_INSTALLED_PACKAGE=$package" >> $env:GITHUB_ENV
           "COTHINK_TEST_CLI=$package/bin/cothink.js" >> $env:GITHUB_ENV
-          node test/helpers/windows-installed.mjs $package
+      - name: Installed native clipboard round trip
+        shell: pwsh
+        run: |
+          node test/helpers/windows-installed.mjs "$env:COTHINK_INSTALLED_PACKAGE"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          $env:COTHINK_TEST_CLI = "$package/bin/cothink.js"
+      - name: Installed CLI answers and history
+        shell: pwsh
+        run: |
           node --test test/pi-session.test.js
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           node test/helpers/pi-manual-terminal.mjs --smoke
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          Compress-Archive -Path $folder -DestinationPath "$folder.zip"
-          Get-FileHash "$folder.zip" -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $([IO.Path]::GetFileName($_.Path))" } | Set-Content -Encoding utf8 dist/SHA256SUMS-${{ matrix.arch }}.txt
+      - name: Compress the verified download
+        shell: pwsh
+        run: |
+          Compress-Archive -Path $env:COTHINK_DOWNLOAD_FOLDER -DestinationPath "$env:COTHINK_DOWNLOAD_FOLDER.zip"
+          Get-FileHash "$env:COTHINK_DOWNLOAD_FOLDER.zip" -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $([IO.Path]::GetFileName($_.Path))" } | Set-Content -Encoding utf8 dist/SHA256SUMS-${{ matrix.arch }}.txt
       - uses: actions/setup-python@v5
         if: matrix.arch == 'x64'
         with:

@@ -2,9 +2,12 @@
 import { mkdirSync, readFileSync, writeFileSync, copyFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
+import assert from 'node:assert/strict';
 
 const archive = resolve(process.argv[2]);
 const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url)));
+assert.equal(process.platform, 'win32', 'Build Windows downloads on a Windows runner');
+assert.equal(basename(archive), `cothink-v2-${version}.tgz`, 'Tarball must match the release version');
 const directory = resolve('dist', `CoThink-${version}-windows-${process.arch}`);
 mkdirSync(directory, { recursive: true });
 copyFileSync(archive, join(directory, basename(archive)));
