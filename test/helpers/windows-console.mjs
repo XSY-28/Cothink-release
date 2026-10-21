@@ -12,7 +12,14 @@ if (process.argv.includes('--probe')) {
   const terminal = openTerminal();
   if (!terminal) {
     console.error(JSON.stringify({ platform: process.platform, noTTY: process.env.COTHINK_NO_TTY, stdoutTTY: process.stdout.isTTY }));
-    for (const [name, Stream] of [['\\\\.\\CONIN$', ReadStream], ['\\\\.\\CONOUT$', WriteStream]]) {
+    const devices = [
+      ['CONIN$', ReadStream], ['CONOUT$', WriteStream],
+      ['\\\\.\\CONIN$', ReadStream], ['\\\\.\\CONOUT$', WriteStream],
+      ['\\\\?\\CONIN$', ReadStream], ['\\\\?\\CONOUT$', WriteStream],
+      ['\\\\?\\GLOBALROOT\\Device\\ConDrv\\CurrentIn', ReadStream],
+      ['\\\\?\\GLOBALROOT\\Device\\ConDrv\\CurrentOut', WriteStream],
+    ];
+    for (const [name, Stream] of devices) {
       let fd, stream;
       try {
         fd = openSync(Buffer.from(name), 'r+');
@@ -20,6 +27,7 @@ if (process.argv.includes('--probe')) {
         stream = new Stream(fd);
         stream.setRawMode?.(true);
         stream.setRawMode?.(false);
+        console.error(JSON.stringify({ name, initialized: true }));
       } catch (error) { console.error(JSON.stringify({ name, error: error.message, code: error.code, syscall: error.syscall })); }
       finally { if (stream) stream.destroy(); else if (fd !== undefined) closeSync(fd); }
     }
