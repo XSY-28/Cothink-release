@@ -10,6 +10,8 @@ CoThink 基于 Pi 开发，可复用 Pi 社区的技能（Skills）、提示模�
 
 需要 Node.js ≥22.19、npm 和 Git。
 
+`0.6.0-windows.2` 已提交 npm，正在等待 registry 后台校验完成；默认安装目前仍可能得到旧版。Windows 可先使用下方已公开的 ZIP。
+
 安装最新版：
 
 ```sh
@@ -35,7 +37,7 @@ export PATH="$HOME/.local/bin:$PATH"
 
 ### 从源码运行
 
-当前 GitHub 版本为 `0.6.0-windows.1`，包括持续对话模式与 Windows 适配；npm 的 `latest` 暂仍为旧版，Windows 请使用下方 GitHub 下载包。
+当前版本 `0.6.0-windows.2` 包括持续对话模式、Windows 适配及 npm 安装兼容修复。GitHub 上的 `0.6.0-windows.1` ZIP 继续保留。
 
 GitHub 仓库和发行下载公开可读。
 
@@ -49,6 +51,19 @@ node bin/cothink.js
 首次设置选择一个主模型、至少一个有序副模型，并为 team 命名。通过 `/team` 复用、创建、调整和删除组合，已有服务商认证继续复用。API Key 隐藏输入，由 Pi 保存到 CoThink 数据根的 `pi/auth.json`；角色配置只保存模型引用。内置服务商不需要手填地址和协议。配置过程不发送生成请求；OAuth 登录可能需要浏览器操作。
 
 旧版只配置主模型的配置仍可在一次性入口通过 `/one` 使用；建立具名 team 时需要至少一个副模型。普通讨论缺少评审时会在首次请求前拒绝。
+
+## Windows 通过 npm 安装
+
+安装 Node.js ≥22.19 与 Git for Windows。在 Windows Terminal 的 PowerShell 中运行：
+
+```powershell
+npm.cmd install -g cothink-v2
+cothink.cmd
+```
+
+使用 `.cmd` 入口可以避免 PowerShell 对 `.ps1` 脚本的执行策略限制，无需修改系统执行策略。首次启动会引导设置 Team 和认证；也可先运行 `cothink.cmd init`。更新使用 `npm.cmd install -g cothink-v2@latest`，升级后退出旧窗口并重开。
+
+npm 下载同一个跨平台包，按当前系统准备本地依赖。全局命令应来自当前 npm prefix；可用 `Get-Command cothink.cmd` 检查。数据仍在 `$HOME\.cothink`，安装和升级不删除配置、认证或历史。需要离线包时仍可使用下方 ZIP。
 
 ## Windows 下载与启动
 

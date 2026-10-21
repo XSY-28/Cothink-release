@@ -1,0 +1,135 @@
+name: npm install verification
+on:
+  push:
+    branches: [codex/windows-npm]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Expected npm latest version; empty builds the candidate
+        type: string
+        default: ''
+permissions:
+  contents: read
+jobs:
+  pack:
+    if: inputs.version == '' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.19.0
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm run --silent pack:npm -- dist > pack-result.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: npm-candidate
+          path: |
+            dist/*.tgz
+            pack-result.json
+          if-no-files-found: error
+  install:
+    needs: pack
+    if: always() && (needs.pack.result == 'success' || inputs.version != '')
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            arch: x64
+          - os: windows-11-arm
+            arch: arm64
+          - os: macos-latest
+            arch: arm64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      REGISTRY_VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.19.0
+          architecture: ${{ matrix.arch }}
+      - uses: actions/download-artifact@v4
+        if: inputs.version == ''
+        with:
+          name: npm-candidate
+          path: candidate
+      - name: Normal Windows global npm install in a clean prefix and cache
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $prefix = Join-Path $env:RUNNER_TEMP 'CoThink npm 中文 test'
+          $env:npm_config_cache = Join-Path $env:RUNNER_TEMP 'empty-npm-cache'
+          $env:npm_config_userconfig = Join-Path $env:RUNNER_TEMP 'empty-user.npmrc'
+          $env:npm_config_globalconfig = Join-Path $env:RUNNER_TEMP 'empty-global.npmrc'
+          New-Item -ItemType File $env:npm_config_userconfig,$env:npm_config_globalconfig | Out-Null
+          if ($env:REGISTRY_VERSION) {
+            if ($env:REGISTRY_VERSION -notmatch '^\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$') { throw 'Invalid version' }
+            $resolved = npm.cmd view cothink-v2 version
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+            if ($resolved -ne $env:REGISTRY_VERSION) { throw 'Unexpected npm latest version' }
+            $target = 'cothink-v2'
+          } else { $target = (Get-ChildItem candidate/dist/*.tgz).FullName }
+          npm.cmd install --global --prefix $prefix --no-audit --no-fund $target
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $env:PATH = "$prefix;$env:PATH"
+          if ((Get-Command cothink.cmd).Source -ne (Join-Path $prefix 'cothink.cmd')) { throw 'Wrong global command' }
+          cothink.cmd --version
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          if ('${{ matrix.arch }}' -eq 'x64') {
+            $local = Join-Path $env:RUNNER_TEMP 'CoThink local prefix'
+            npm.cmd install --prefix $local --cache "$env:RUNNER_TEMP/local-empty-cache" --no-audit --no-fund $target
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+            & "$local/node_modules/.bin/cothink.cmd" --version
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          }
+          $package = Join-Path $prefix 'node_modules/cothink-v2'
+          "COTHINK_INSTALLED_PACKAGE=$package" >> $env:GITHUB_ENV
+          "COTHINK_TEST_CLI=$package/bin/cothink.js" >> $env:GITHUB_ENV
+      - name: Normal macOS global npm install in a clean prefix and cache
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          prefix="$RUNNER_TEMP/CoThink npm 中文 test"
+          export npm_config_cache="$RUNNER_TEMP/empty-npm-cache"
+          export npm_config_userconfig="$RUNNER_TEMP/empty-user.npmrc"
+          export npm_config_globalconfig="$RUNNER_TEMP/empty-global.npmrc"
+          touch "$npm_config_userconfig" "$npm_config_globalconfig"
+          if [ -n "$REGISTRY_VERSION" ]; then
+            test "$(npm view cothink-v2 version)" = "$REGISTRY_VERSION"
+            target="cothink-v2"
+          else
+            target="$(find "$PWD/candidate/dist" -name '*.tgz')"
+          fi
+          npm install --global --prefix "$prefix" --no-audit --no-fund "$target"
+          export PATH="$prefix/bin:$PATH"
+          test "$(command -v cothink)" = "$prefix/bin/cothink"
+          cothink --version
+          echo "COTHINK_INSTALLED_PACKAGE=$prefix/lib/node_modules/cothink-v2" >> "$GITHUB_ENV"
+          echo "COTHINK_TEST_CLI=$prefix/lib/node_modules/cothink-v2/bin/cothink.js" >> "$GITHUB_ENV"
+      - name: Verify the installed SDKs, native dependency and command behavior
+        shell: bash
+        run: |
+          node test/helpers/npm-installed.mjs "$COTHINK_INSTALLED_PACKAGE"
+          node --test test/pi-session.test.js
+          node test/helpers/pi-manual-terminal.mjs --smoke
+      - name: Installed Windows native clipboard
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          node test/helpers/windows-installed.mjs "$env:COTHINK_INSTALLED_PACKAGE"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - uses: actions/setup-python@v5
+        if: runner.os == 'Windows' && matrix.arch == 'x64'
+        with:
+          python-version: '3.12'
+      - name: Windows global installation ConPTY
+        if: runner.os == 'Windows' && matrix.arch == 'x64'
+        shell: pwsh
+        run: |
+          python -m pip install pywinpty==3.0.5 pyte==0.8.2
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python test/windows_conpty_checks.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }

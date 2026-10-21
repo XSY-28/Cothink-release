@@ -1,6 +1,6 @@
 {
   "name": "cothink-v2",
-  "version": "0.6.0-windows.1",
+  "version": "0.6.0-windows.2",
   "files": [
     "bin/cothink.js",
     "src/cli.js",
@@ -56,7 +56,8 @@
     "test:work": "node --test test/agent-sync-dispatch.test.js test/agent-sync-entrypoints.test.js",
     "test:agent-sync-core": "node --test packages/agent-sync/test/*.test.js",
     "test:packages": "node --test test/pi-packages.test.js",
-    "test:windows": "node --test test/pi-windows.test.js test/clipboard.test.js test/pi-session.test.js test/pi-setup-io.test.js test/pi-discussion.test.js"
+    "test:windows": "node --test test/pi-windows.test.js test/clipboard.test.js test/pi-session.test.js test/pi-setup-io.test.js test/pi-discussion.test.js",
+    "pack:npm": "node scripts/pack-npm.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "file:vendor/pi-deps/anthropic-ai-sdk-0.124.0.tgz",
