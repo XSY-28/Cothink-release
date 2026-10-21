@@ -6,6 +6,7 @@ import shutil
 import threading
 import time
 import tempfile
+import sys
 from pathlib import Path
 from winpty import PtyProcess
 import pyte
@@ -38,6 +39,9 @@ try:
 finally:
     if probe.isalive():
         probe.terminate(force=True)
+if '--console-only' in sys.argv:
+    print('Windows console probe passed')
+    sys.exit(0)
 
 report_dir = Path(tempfile.mkdtemp(prefix='cothink-conpty-'))
 report = report_dir / 'home.txt'

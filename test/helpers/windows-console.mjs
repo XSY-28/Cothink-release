@@ -3,11 +3,27 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import assert from 'node:assert/strict';
+import { openSync, closeSync } from 'node:fs';
+import { ReadStream, WriteStream, isatty } from 'node:tty';
 if (process.argv.includes('--probe')) {
   assert.equal(Boolean(process.stdin.isTTY), false);
   const cli = process.env.COTHINK_TEST_CLI ?? fileURLToPath(new URL('../../bin/cothink.js', import.meta.url));
   const { openTerminal } = await import(pathToFileURL(resolve(dirname(cli), '../src/terminal.js')));
   const terminal = openTerminal();
+  if (!terminal) {
+    console.error(JSON.stringify({ platform: process.platform, noTTY: process.env.COTHINK_NO_TTY, stdoutTTY: process.stdout.isTTY }));
+    for (const [name, Stream] of [['\\\\.\\CONIN$', ReadStream], ['\\\\.\\CONOUT$', WriteStream]]) {
+      let fd, stream;
+      try {
+        fd = openSync(name, 'r+');
+        console.error(JSON.stringify({ name, fd, isTTY: isatty(fd) }));
+        stream = new Stream(fd);
+        stream.setRawMode?.(true);
+        stream.setRawMode?.(false);
+      } catch (error) { console.error(JSON.stringify({ name, error: error.message, code: error.code, syscall: error.syscall })); }
+      finally { if (stream) stream.destroy(); else if (fd !== undefined) closeSync(fd); }
+    }
+  }
   assert.ok(terminal, 'piped Windows stdin must reopen CONIN$/CONOUT$');
   terminal.input.setRawMode(true);
   terminal.input.setRawMode(false);
