@@ -37,8 +37,17 @@ try:
             pass
     assert 'CONSOLE_REOPEN_OK' in probe_text, probe_text
 finally:
+    # The success marker precedes Node's normal handle cleanup. Let it exit;
+    # immediately signalling a process that is already exiting can get WinError 5.
+    exit_deadline = time.monotonic() + 2
+    while probe.isalive() and time.monotonic() < exit_deadline:
+        time.sleep(0.01)
     if probe.isalive():
-        probe.terminate(force=True)
+        try:
+            probe.terminate(force=True)
+        except PermissionError:
+            if probe.isalive():
+                raise
 if '--console-only' in sys.argv:
     print('Windows console probe passed')
     sys.exit(0)
