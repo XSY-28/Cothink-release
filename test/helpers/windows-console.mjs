@@ -13,16 +13,13 @@ if (process.argv.includes('--probe')) {
   if (!terminal) {
     console.error(JSON.stringify({ platform: process.platform, noTTY: process.env.COTHINK_NO_TTY, stdoutTTY: process.stdout.isTTY }));
     const devices = [
-      ['CONIN$', ReadStream], ['CONOUT$', WriteStream],
-      ['\\\\.\\CONIN$', ReadStream], ['\\\\.\\CONOUT$', WriteStream],
-      ['\\\\?\\CONIN$', ReadStream], ['\\\\?\\CONOUT$', WriteStream],
       ['\\\\?\\GLOBALROOT\\Device\\ConDrv\\CurrentIn', ReadStream],
       ['\\\\?\\GLOBALROOT\\Device\\ConDrv\\CurrentOut', WriteStream],
     ];
     for (const [name, Stream] of devices) {
       let fd, stream;
       try {
-        fd = openSync(Buffer.from(name), 'r+');
+        fd = openSync(name, 'r+');
         console.error(JSON.stringify({ name, fd, isTTY: isatty(fd) }));
         stream = new Stream(fd);
         stream.setRawMode?.(true);

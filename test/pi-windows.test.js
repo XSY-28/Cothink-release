@@ -88,8 +88,7 @@ function consoleFixture(t, { failOutput = false } = {}) {
 test('Windows pipe setup opens a read/write console without consuming stdin; close is idempotent', t => {
   const f = consoleFixture(t);
   const terminal = openTerminal({ platform: 'win32', env: {}, stdin: {}, stderr: {} });
-  assert.ok(f.opened.every(([name]) => Buffer.isBuffer(name)), 'device paths must bypass Node UNC normalization');
-  assert.deepEqual(f.opened.map(([name, flags]) => [name.toString(), flags]), [['\\\\.\\CONIN$', 'r+'], ['\\\\.\\CONOUT$', 'r+']]);
+  assert.deepEqual(f.opened, [['\\\\?\\GLOBALROOT\\Device\\ConDrv\\CurrentIn', 'r+'], ['\\\\?\\GLOBALROOT\\Device\\ConDrv\\CurrentOut', 'r+']]);
   assert.ok(terminal);
   terminal.close(); terminal.close();
   assert.deepEqual(f.destroyed, [41, 42]);
