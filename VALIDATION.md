@@ -8,7 +8,7 @@
 - Windows x64：ConPTY 下管道输入重开控制台及 raw mode，中文多行粘贴、Ctrl+J、详情/Esc、ONE 模式与退出。测试宿主用屏幕模拟器回应终端位置查询，零付费模型调用。
 - macOS 干净发行源码：完整 177 通过、1 Windows 专属跳过；此前终端 PTY 17+40+6 通过。最后的 Windows 设备路径修复单独通过专项和 Windows CI，不借用旧 macOS 记录宣称 Windows 通过。
 
-本轮构建与安装证据：[Windows release CI](https://github.com/XSY-28/Cothink-release/actions/runs/39568034284)。公开 Release 发布后还会运行仓库的 `Verify published Windows download`，从匿名下载地址核对 SHA-256、解压并执行安装包入口。
+本轮构建与安装证据：[Windows release CI](https://github.com/XSY-28/Cothink-release/actions/runs/39568034284)。[公开下载复验](https://github.com/XSY-28/Cothink-release/actions/runs/39569517392) 已完成：x64 与 ARM64 均不带 GitHub 凭据从 Release 下载，SHA-256 匹配后解压安装，版本、原生剪贴板往返、安装入口 2/2 与三次 localhost 讨论均通过。没有 npm 依赖安装或付费模型调用。
 
 ## 已发现并修复
 
