@@ -33,6 +33,7 @@ if (process.argv.includes("--keys")) {
   await new Promise(() => {});
 }
 const home = mkdtempSync(join(tmpdir(), "cothink-pi-manual-"));
+if (process.env.COTHINK_TEST_HOME_REPORT) writeFileSync(process.env.COTHINK_TEST_HOME_REPORT, home);
 let count = 0,
   mainCount = 0;
 const server = createServer(async (req, res) => {

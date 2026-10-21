@@ -78,7 +78,7 @@ jobs:
         if: matrix.arch == 'x64'
         shell: pwsh
         run: |
-          python -m pip install pywinpty==3.0.5
+          python -m pip install pywinpty==3.0.5 pyte==0.8.2
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python test/windows_conpty_checks.py
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
