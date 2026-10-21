@@ -21,9 +21,13 @@ cmd('install.cmd', [
   'where tar.exe >nul 2>nul',
   'if errorlevel 1 (echo Windows tar.exe is required. Install Git for Windows or update Windows. & exit /b 1)',
   'if exist "%~dp0app" (echo The app directory already exists. Use a freshly extracted ZIP to reinstall. & exit /b 1)',
-  'mkdir "%~dp0app"',
-  `tar.exe -xzf "%~dp0${basename(archive)}" -C "%~dp0app"`,
+  'pushd "%~dp0"',
   'if errorlevel 1 exit /b %errorlevel%',
+  'mkdir app',
+  `tar.exe -xzf "${basename(archive)}" -C app`,
+  'set "COTHINK_INSTALL_EXIT=%errorlevel%"',
+  'popd',
+  'if not "%COTHINK_INSTALL_EXIT%"=="0" exit /b %COTHINK_INSTALL_EXIT%',
   'echo Installed. Run cothink.cmd in this folder or from your project directory.',
 ]);
 cmd('cothink.cmd', [
