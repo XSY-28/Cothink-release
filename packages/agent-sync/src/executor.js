@@ -74,7 +74,8 @@ export function validateExecution(value) {
 }
 function docker(args, { onData, signal, log } = {}) {
   return new Promise((resolve, reject) => {
-    const env = { PATH: process.env.PATH, HOME: process.env.HOME };
+    const env = { PATH: process.env.PATH, HOME: process.env.HOME,
+      USERPROFILE: process.env.USERPROFILE, SystemRoot: process.env.SystemRoot };
     // Docker context credentials stay in the trusted CLI; never passed to the container.
     const p = spawn("docker", args, { env, stdio: ["ignore", "pipe", "pipe"] });
     const chunks = [];
@@ -122,6 +123,13 @@ async function required(args) {
     });
   return r.output.trim();
 }
+export function localDockerSocket(host, platform = process.platform) {
+  if (typeof host === "string" && host.startsWith("unix:///"))
+    return host.slice("unix://".length);
+  if (platform === "win32" && /^npipe:\/\/\/\/\.\/pipe\/[A-Za-z0-9_.-]+$/.test(host))
+    return host.slice("npipe://".length).replaceAll("/", "\\");
+  throw problem("EXECUTOR_UNAVAILABLE", "Requires a local Docker Unix socket or Windows named pipe");
+}
 export function createExecutor({ execution: e, data, root, onOperation }) {
   let ready, socketPath;
   const guards = new Map(),
@@ -162,12 +170,7 @@ export function createExecutor({ execution: e, data, root, onOperation }) {
         "{{json .Endpoints.docker.Host}}",
       ]),
     );
-    if (typeof host !== "string" || !host.startsWith("unix:///"))
-      throw problem(
-        "EXECUTOR_UNAVAILABLE",
-        "First release requires the local Docker Unix socket",
-      );
-    socketPath = host.slice("unix://".length);
+    socketPath = localDockerSocket(host);
     return socketPath;
   }
   async function engine(method, path, body, { signal, onFrame } = {}) {
@@ -417,7 +420,8 @@ export function createExecutor({ execution: e, data, root, onOperation }) {
       "docker",
       ["start", "--attach", "--interactive", name],
       {
-        env: { PATH: process.env.PATH, HOME: process.env.HOME },
+        env: { PATH: process.env.PATH, HOME: process.env.HOME,
+          USERPROFILE: process.env.USERPROFILE, SystemRoot: process.env.SystemRoot },
         stdio: ["pipe", "pipe", "pipe"],
       },
     );
@@ -467,11 +471,11 @@ export function createExecutor({ execution: e, data, root, onOperation }) {
   function signature(map) {
     return digest([...map].map(([p, v]) => [p, v.hash, v.mode]));
   }
-  function stable(scratch) {
+  function stable(scratch, modes) {
     // lstat scans never follow links. Freeze + two complete identical reads; any observed
     // async mutation refuses the entire import. This is source consistency, not DB consistency.
-    const a = scan(scratch, { artifacts: e.artifactPaths }),
-      b = scan(scratch, { artifacts: e.artifactPaths });
+    const a = scan(scratch, { artifacts: e.artifactPaths, modes }),
+      b = scan(scratch, { artifacts: e.artifactPaths, modes });
     if (signature(a.map) !== signature(b.map))
       throw problem("UNSTABLE_SNAPSHOT", "Source changed while frozen");
     return b;
@@ -613,7 +617,7 @@ export function createExecutor({ execution: e, data, root, onOperation }) {
       }
       // Docker transport errors cannot masquerade as a command's ordinary nonzero exit.
       await pause(c.containerName);
-      const frozen = stable(c.scratch);
+      const frozen = stable(c.scratch, before);
       if (!(await state(c.containerName))?.Paused)
         throw problem("EXECUTION_UNKNOWN", "Freeze lost during extraction");
       const source = new Map(),
@@ -637,7 +641,7 @@ export function createExecutor({ execution: e, data, root, onOperation }) {
       }
       // A third content pass binds the imported bytes to the still-frozen live projection.
       if (
-        signature(scan(c.scratch, { artifacts: e.artifactPaths }).map) !==
+        signature(scan(c.scratch, { artifacts: e.artifactPaths, modes: before }).map) !==
         signature(frozen.map)
       )
         throw problem("UNSTABLE_SNAPSHOT", "Snapshot changed before import");
@@ -823,7 +827,7 @@ export function createExecutor({ execution: e, data, root, onOperation }) {
             binding,
           };
         await pause(name);
-        const snapshot = stable(workspace),
+        const snapshot = stable(workspace, map),
           expected = new Map([...map].map(([p, e]) => [p, e]));
         let modified = snapshot.map.size !== map.size;
         for (const [p, item] of expected) {

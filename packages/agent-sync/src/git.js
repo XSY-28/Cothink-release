@@ -178,7 +178,7 @@ export async function materialize(root, map, path) {
     });
   }
 }
-export function scan(path, { artifacts = [] } = {}) {
+export function scan(path, { artifacts = [], modes } = {}) {
   const map = new Map(),
     ignored = [];
   function walk(dir, prefix = "") {
@@ -203,7 +203,11 @@ export function scan(path, { artifacts = [] } = {}) {
         map.set(rel, {
           data,
           hash: digest(data),
-          mode: s.mode & 0o111 ? "100755" : "100644",
+          // NTFS stat does not represent Git's executable bit. Preserve the
+          // authoritative tree mode; new Windows files default to non-executable.
+          mode: process.platform === "win32"
+            ? modes?.get(rel)?.mode ?? "100644"
+            : s.mode & 0o111 ? "100755" : "100644",
         });
       }
     }
@@ -213,7 +217,7 @@ export function scan(path, { artifacts = [] } = {}) {
   return { map, ignored };
 }
 export async function assertProjection(root, map, path) {
-  const actual = scan(path).map;
+  const actual = scan(path, { modes: map }).map;
   if (actual.size !== map.size)
     throw problem(
       "UNMANAGED_WRITE",

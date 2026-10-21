@@ -12,7 +12,7 @@ export function createClipboardWriter({
   let pending = Promise.resolve();
   return function copyText(text) {
     const result = pending.then(async () => {
-      if (platform !== 'darwin') {
+      if (platform !== 'darwin' && platform !== 'win32') {
         throw clipboardError('CLIPBOARD_PLATFORM', '当前平台暂不支持自动复制');
       }
       if (env.SSH_CONNECTION || env.SSH_CLIENT || env.MOSH_CONNECTION) {

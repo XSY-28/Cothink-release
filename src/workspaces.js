@@ -72,14 +72,17 @@ export function workspaceTools({
       typeof path !== "string" ||
       path.includes("\0") ||
       path.split(/[\\/]/).includes("..") ||
-      path.includes("\\")
+      (path.includes("\\") && process.platform !== "win32")
     )
       throw problem("PATH", "需要无歧义的工作区相对路径。");
     if (path.startsWith("output:"))
       throw problem("PATH", "output:只用于read日志，不能作为源码路径。");
-    const rel = relative(c.workspace, resolve(c.workspace, path));
+    const nativeRel = relative(c.workspace, resolve(c.workspace, path));
+    // The kernel uses portable repository paths; native Windows absolute paths
+    // are accepted at the tool boundary, then normalized before scope checks.
+    const rel = nativeRel.replaceAll("\\", "/");
     if (
-      isAbsolute(rel) ||
+      isAbsolute(nativeRel) ||
       rel === ".." ||
       rel.startsWith("../") ||
       rel.split("/").some((x) => x.toLowerCase() === ".git")

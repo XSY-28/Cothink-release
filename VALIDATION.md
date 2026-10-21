@@ -1,3 +1,9 @@
+# Windows 0.6.0-windows.1 发行验证
+
+当前为发行候选，Windows CI 结果待记录；未完成前不发布下载包。前轮本地完整174通过/1 Windows检查跳过；专项34通过/1跳过、包管理19/19，macOS PTY 17+40+6通过。此轮新增Windows元数据与Git执行位修复。
+
+Windows x64/ARM64 目标检查：Node22.19最小版本、源码专项、真实ZIP安装/启动、中文与空格路径、native剪贴板读写、localhost问答/历史；x64另验ConPTY。无真实模型费用。物理IME/键盘、跨应用人工粘贴及Windows Docker仍待现场验收。
+
 # 验证范围
 
 本仓库是在 CoThink 0.5.0-packages.1 基础上继续开发的 Alpha 源码，基于固定 Pi 1.0.0、定制 coding-agent 1.0.0-cothink.9 与 agent-sync 0.1.1（协议1）。当前 main 新增对话模式切换，尚未发布新的 npm 版本；Pi 固定依赖、agent-sync 内核及许可证保持。

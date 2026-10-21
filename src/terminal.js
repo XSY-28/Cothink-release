@@ -6,19 +6,27 @@ import { ReadStream, WriteStream } from 'node:tty';
 import { saveConfig } from './config.js';
 
 /** Prompts use the controlling terminal so piped questions never become configuration. */
-export function openTerminal() {
-  if (process.env.COTHINK_NO_TTY === '1') return null;
-  if (process.stdin.isTTY && process.stderr.isTTY) return { input: process.stdin, output: process.stderr, close() {} };
-  let readFd, writeFd;
+export function openTerminal({ platform = process.platform, env = process.env,
+  stdin = process.stdin, stderr = process.stderr } = {}) {
+  if (env.COTHINK_NO_TTY === '1') return null;
+  if (stdin.isTTY && stderr.isTTY) return { input: stdin, output: stderr, close() {} };
+  let readFd, writeFd, input, output, closed = false;
+  const close = () => {
+    if (closed) return;
+    closed = true;
+    if (input) input.destroy(); else if (readFd !== undefined) closeSync(readFd);
+    if (output) output.destroy(); else if (writeFd !== undefined) closeSync(writeFd);
+  };
   try {
-    readFd = openSync('/dev/tty', 'r');
-    writeFd = openSync('/dev/tty', 'w');
-    const input = new ReadStream(readFd);
-    const output = new WriteStream(writeFd);
-    return { input, output, close() { input.destroy(); output.destroy(); } };
+    // Windows raw mode needs write access to CONIN$ even though we only read keys.
+    readFd = openSync(platform === 'win32' ? '\\\\.\\CONIN$' : '/dev/tty', platform === 'win32' ? 'r+' : 'r');
+    input = new ReadStream(readFd);
+    // libuv also reads the output buffer's size/mode while creating WriteStream.
+    writeFd = openSync(platform === 'win32' ? '\\\\.\\CONOUT$' : '/dev/tty', platform === 'win32' ? 'r+' : 'w');
+    output = new WriteStream(writeFd);
+    return { input, output, close };
   } catch {
-    if (readFd !== undefined) closeSync(readFd);
-    if (writeFd !== undefined) closeSync(writeFd);
+    close();
     return null;
   }
 }

@@ -63,11 +63,32 @@ test('each remote marker refuses before loading the helper', async () => {
 });
 
 test('unsupported platforms refuse before loading the helper', async () => {
-  for (const platform of ['linux', 'win32', 'freebsd']) {
+  for (const platform of ['linux', 'freebsd']) {
     const copy = createClipboardWriter({ platform, env: {},
       getClipboard() { assert.fail('must not load unsupported clipboard'); } });
     await assert.rejects(copy('text'), errorIs('CLIPBOARD_PLATFORM'));
   }
+});
+
+test('Windows native clipboard preserves Chinese and multiline text and reports completion', async () => {
+  const finished = deferred();
+  const text = '中文 👩🏽‍💻\r\n  第二行\n';
+  let received, settled = false;
+  const copy = createClipboardWriter({ platform: 'win32', env: {},
+    getClipboard: () => ({ setText(value) { received = value; return finished.promise; } }) });
+  const result = copy(text).then(() => { settled = true; });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(received, text);
+  assert.equal(settled, false);
+  finished.resolve();
+  await result;
+  assert.equal(settled, true);
+});
+
+test('Windows remote clipboard is refused and missing native components fail visibly', async () => {
+  await assert.rejects(createClipboardWriter({ platform: 'win32', env: { SSH_CONNECTION: 'remote' },
+    getClipboard() { assert.fail('remote must not load native clipboard'); } })('text'), errorIs('CLIPBOARD_REMOTE'));
+  await assert.rejects(createClipboardWriter({ platform: 'win32', env: {}, getClipboard: () => undefined })('text'), errorIs('CLIPBOARD_UNAVAILABLE'));
 });
 
 test('A finishes before B starts, with B becoming the final value', async () => {
