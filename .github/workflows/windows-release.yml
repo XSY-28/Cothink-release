@@ -41,18 +41,16 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           $folder = (Get-ChildItem dist -Directory -Filter 'CoThink-*').FullName
           "COTHINK_DOWNLOAD_FOLDER=$folder" >> $env:GITHUB_ENV
-      - name: Install the user download with an empty cache
+      - name: Install the user download without npm or network
         shell: pwsh
         run: |
           $install = Join-Path $env:RUNNER_TEMP 'CoThink 中文 test'
           Copy-Item $env:COTHINK_DOWNLOAD_FOLDER $install -Recurse
-          $env:npm_config_cache = Join-Path $env:RUNNER_TEMP 'cothink-empty-npm-cache'
-          New-Item -ItemType Directory $env:npm_config_cache | Out-Null
           & "$install/install.cmd"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           & "$install/cothink.cmd" --version
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          $package = Join-Path $install 'app/node_modules/cothink-v2'
+          $package = Join-Path $install 'app/package'
           "COTHINK_INSTALLED_PACKAGE=$package" >> $env:GITHUB_ENV
           "COTHINK_TEST_CLI=$package/bin/cothink.js" >> $env:GITHUB_ENV
       - name: Installed native clipboard round trip

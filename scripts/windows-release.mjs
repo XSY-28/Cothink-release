@@ -18,15 +18,21 @@ cmd('install.cmd', [
   'if errorlevel 1 (echo Install Node.js 22.19 or newer from https://nodejs.org/ first. & exit /b 1)',
   'node -e "const [a,b]=process.versions.node.split(\'.\').map(Number);process.exit(a>22 || a===22 && b>=19 ? 0 : 1)"',
   'if errorlevel 1 (echo Node.js 22.19 or newer is required. & exit /b 1)',
-  `call npm.cmd install --prefix "%~dp0app" --offline --ignore-scripts --no-audit --no-fund "%~dp0${basename(archive)}"`,
+  'where tar.exe >nul 2>nul',
+  'if errorlevel 1 (echo Windows tar.exe is required. Install Git for Windows or update Windows. & exit /b 1)',
+  'if exist "%~dp0app" (echo The app directory already exists. Use a freshly extracted ZIP to reinstall. & exit /b 1)',
+  'mkdir "%~dp0app"',
+  `tar.exe -xzf "%~dp0${basename(archive)}" -C "%~dp0app"`,
   'if errorlevel 1 exit /b %errorlevel%',
   'echo Installed. Run cothink.cmd in this folder or from your project directory.',
 ]);
 cmd('cothink.cmd', [
   '@echo off', 'setlocal',
-  'if not exist "%~dp0app\\node_modules\\.bin\\cothink.cmd" call "%~dp0install.cmd"',
+  'if exist "%~dp0app\\package\\bin\\cothink.js" goto run',
+  'call "%~dp0install.cmd"',
   'if errorlevel 1 exit /b %errorlevel%',
-  'call "%~dp0app\\node_modules\\.bin\\cothink.cmd" %*',
+  ':run',
+  'node "%~dp0app\\package\\bin\\cothink.js" %*',
   'exit /b %errorlevel%',
 ]);
 writeFileSync(join(directory, 'README.txt'), `CoThink ${version} — Windows ${process.arch}\n\n` +
