@@ -50,7 +50,7 @@ const inside = (root, path) => {
   const rel = relative(root, path);
   return (
     rel === "" ||
-    (!rel.startsWith(".." + "/") && rel !== ".." && !isAbsolute(rel))
+    (!/^\.\.(?:[\\/]|$)/.test(rel) && !isAbsolute(rel))
   );
 };
 const npmCommand = (offline) => [
@@ -661,12 +661,28 @@ async function candidateProcess({
     );
     onProgress({ type: "start", action: command, source });
     let aborting = false,
-      killTimer;
+      killTimer, cancellationError, windowsTreeStopped = false;
+    let finishUnknown;
+    const unknown = new Promise(resolve => { finishUnknown = resolve; });
+    const exited = new Promise((resolve, reject) => {
+      child.once("error", error => {
+        if (aborting) {
+          cancellationError ??= error;
+          child.unref();
+          finishUnknown(null);
+        } else reject(error);
+      });
+      child.once("close", resolve);
+    });
     const kill = (sig) => {
       try {
-        process.platform === "win32"
-          ? child.kill(sig)
-          : process.kill(-child.pid, sig);
+        if (process.platform === "win32") {
+          if (windowsTreeStopped) return;
+          // Killing only the candidate's Node process leaves npm descendants alive.
+          execFileSync(join(process.env.SystemRoot ?? "C:\\Windows", "System32", "taskkill.exe"),
+            ["/F", "/T", "/PID", String(child.pid)], { windowsHide: true, stdio: "pipe", timeout: 5000 });
+          windowsTreeStopped = true;
+        } else process.kill(-child.pid, sig);
       } catch (error) {
         if (error.code === "ESRCH") return;
         // macOS can report EPERM for a reaped group. Verify that no live member
@@ -695,23 +711,39 @@ async function candidateProcess({
     };
     const abort = () => {
       aborting = true;
-      kill("SIGTERM");
-      killTimer = setTimeout(() => kill("SIGKILL"), 1000);
+      const stop = (sig) => {
+        try { kill(sig); }
+        catch (error) {
+          cancellationError = error;
+          // Stop the leader as a best effort, but do not claim its descendants stopped.
+          try { child.kill("SIGKILL"); } catch { /* Original tree failure remains authoritative. */ }
+          // A refused kill may never produce close. Return the uncertainty and
+          // keep the private candidate/log, rather than hanging cancellation.
+          child.unref();
+          finishUnknown(null);
+        }
+      };
+      stop("SIGTERM");
+      killTimer = setTimeout(() => stop("SIGKILL"), 1000);
       killTimer.unref();
     };
     signal?.addEventListener("abort", abort, { once: true });
     if (signal?.aborted) abort();
     let code;
     try {
-      code = await new Promise((resolve, reject) => {
-        child.once("error", reject);
-        child.once("close", resolve);
-      });
+      code = await Promise.race([exited, unknown]);
     } finally {
       signal?.removeEventListener("abort", abort);
       clearTimeout(killTimer);
     }
     if (aborting || signal?.aborted) {
+      if (cancellationError) {
+        writePrivateJson(join(candidate, "cancellation.json"), {
+          pid: child.pid, outcome: "unknown", code: cancellationError.code ?? null,
+          status: cancellationError.status ?? null,
+        });
+        throw failure("PACKAGE_CANCEL_UNKNOWN", "无法确认包操作的全部子进程已停止；候选未发布，请检查进程后再操作。私有日志：" + log);
+      }
       // Darwin can briefly retain an exiting descendant after the leader's close
       // event. Wait for verifiable group disappearance; never call it cancelled
       // merely because the parent has exited.

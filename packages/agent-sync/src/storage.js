@@ -32,11 +32,15 @@ export function atomic(path, value) {
     closeSync(fd);
     fd = undefined;
     renameSync(tmp, path);
-    const parent = openSync(dirname(path), "r");
-    try {
-      fsyncSync(parent);
-    } finally {
-      closeSync(parent);
+    // Windows Node cannot open/fsync directory handles. The file is flushed
+    // before atomic rename; directory-entry power-loss durability is OS-owned.
+    if (process.platform !== "win32") {
+      const parent = openSync(dirname(path), "r");
+      try {
+        fsyncSync(parent);
+      } finally {
+        closeSync(parent);
+      }
     }
   } finally {
     if (fd !== undefined) closeSync(fd);

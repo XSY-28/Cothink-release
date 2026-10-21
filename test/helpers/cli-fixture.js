@@ -1,7 +1,8 @@
 import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
 const cli =
   process.env.COTHINK_TEST_CLI ??
-  new URL("../../bin/cothink.js", import.meta.url).pathname;
+  fileURLToPath(new URL("../../bin/cothink.js", import.meta.url));
 export function invoke(f, args, input = "", cwd = f.cwd) {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [cli, ...args], {

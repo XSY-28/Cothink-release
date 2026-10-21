@@ -1,8 +1,31 @@
-# 验证范围
+# Windows 0.6.0-windows.1 发行验证
 
-本仓库是在 CoThink 0.5.0-packages.1 基础上继续开发的 Alpha 源码，基于固定 Pi 1.0.0、定制 coding-agent 1.0.0-cothink.9 与 agent-sync 0.1.1（协议1）。当前 main 新增对话模式切换，尚未发布新的 npm 版本；Pi 固定依赖、agent-sync 内核及许可证保持。
+目标环境为 Windows Terminal + PowerShell，Node.js 最低版本 22.19.0。Windows ZIP 使用 runner 上构建的锁定依赖，安装器直接解压运行包，不经过 npm 二次解析；支持中文和空格目录，并保留调用者的项目目录。
 
-## 当前对话模式
+## 验证范围
+
+- Windows x64 / ARM64：源码专项 38 项、真实下载包安装与版本入口、Windows 原生剪贴板中文/多行往返、安装后的参数/管道/JSON/history/show 和失败退出、localhost 三次讨论。
+- Windows x64：ConPTY 下管道输入重开控制台及 raw mode，中文多行粘贴、Ctrl+J、详情/Esc、ONE 模式与退出。测试宿主用屏幕模拟器回应终端位置查询，零付费模型调用。
+- macOS 干净发行源码：完整 177 通过、1 Windows 专属跳过；此前终端 PTY 17+40+6 通过。最后的 Windows 设备路径修复单独通过专项和 Windows CI，不借用旧 macOS 记录宣称 Windows 通过。
+
+本轮构建与安装证据：[Windows release CI](https://github.com/XSY-28/Cothink-release/actions/runs/39568034284)。公开 Release 发布后还会运行仓库的 `Verify published Windows download`，从匿名下载地址核对 SHA-256、解压并执行安装包入口。
+
+## 已发现并修复
+
+- Windows 短控制台设备名在 Node 22.19 被规范化成带尾斜杠的路径；真实探针确认完整 ConDrv 设备路径可初始化，输入和输出都使用读写权限。模拟测试不能替代这一验证。
+- Windows 不能沿用 POSIX 目录 fsync；保留文件 fsync 与原子 rename，目录项断电耐久性由 Windows 提供。
+- NTFS stat 不推断 Git 执行位，已有版本的 mode 保留，新文件默认 100644。Windows 文件系统上的 chmod 不作为 Git mode 修改接纳。
+- 取消包安装使用进程树终止；终止失败独立记录 UNKNOWN，不依赖可能永不到达的 close 事件。
+- npm 10 空缓存安装曾报 `Unable to resolve reference $openai`，下载包改为直接展开已完整打包的依赖。tar.exe 的绝对中文路径失败通过进入目录后使用相对路径修复。
+- ConPTY 初始测试缺少位置查询响应；快速探针的进程清理竞态另行修复。失败与取消的 Actions 记录保留，不算通过，也没有改变调用次数或产品时限。
+
+## 尚未验证
+
+物理中文输入法、具体终端的实体键盘/鼠标体验、人工跨应用粘贴、Windows Docker Desktop Linux 容器与真实服务商生成仍须分别验收。Shell 保持 Linux 容器隔离，不回退到宿主 PowerShell。Windows ACL 与 POSIX 0600/0700 不是同一权限机制。npm latest 暂仍为旧版；Windows 使用 GitHub ZIP。
+
+---
+
+# 当前对话模式
 
 独立 `/one` 进入持续单模型模式，`/cothink` 回到讨论；`/one <任务>` 仅本条覆盖。输入框下方常驻模式，预算按实际任务变化，任务提交后冻结，运行中切换只影响下一条。保留同一上下文和 Team，模式随会话/分支恢复，新对话默认讨论。
 

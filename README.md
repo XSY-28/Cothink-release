@@ -4,7 +4,7 @@ CoThink 是一个多模型协作工具，旨在让不同模型组成团队，通
 
 CoThink 基于 Pi 开发，可复用 Pi 社区的技能（Skills）、提示模板和主题。其他插件需完成兼容适配后使用，具体范围见下方的[包管理说明](#安装和查看-pi-资源包)。
 
-项目仍在早期预览阶段，目前仅适配 macOS，也还存在一些 bug 和不完善之处。欢迎通过 [Issues](https://github.com/XSY-28/Cothink-release/issues) 反馈问题、分享使用体验或提出改进建议。
+项目仍在早期预览阶段，支持 macOS，Windows 提供 x64 / ARM64 下载包，也还存在一些 bug 和不完善之处。欢迎通过 [Issues](https://github.com/XSY-28/Cothink-release/issues) 反馈问题、分享使用体验或提出改进建议。
 
 ## 安装与启动
 
@@ -35,9 +35,9 @@ export PATH="$HOME/.local/bin:$PATH"
 
 ### 从源码运行
 
-当前 `main` 源码新增 `/one`、`/cothink` 持续切换对话模式，尚未发布到 npm。体验此功能请使用下面的源码入口；上述 npm 安装命令仍安装已发布的包管理版本。
+当前 GitHub 版本为 `0.6.0-windows.1`，包括持续对话模式与 Windows 适配；npm 的 `latest` 暂仍为旧版，Windows 请使用下方 GitHub 下载包。
 
-GitHub 仓库保持私有时，克隆需要仓库访问权限；安装公开 npm 包不需要 GitHub 登录。
+GitHub 仓库和发行下载公开可读。
 
 ```sh
 git clone https://github.com/XSY-28/Cothink-release.git
@@ -49,6 +49,33 @@ node bin/cothink.js
 首次设置选择一个主模型、至少一个有序副模型，并为 team 命名。通过 `/team` 复用、创建、调整和删除组合，已有服务商认证继续复用。API Key 隐藏输入，由 Pi 保存到 CoThink 数据根的 `pi/auth.json`；角色配置只保存模型引用。内置服务商不需要手填地址和协议。配置过程不发送生成请求；OAuth 登录可能需要浏览器操作。
 
 旧版只配置主模型的配置仍可在一次性入口通过 `/one` 使用；建立具名 team 时需要至少一个副模型。普通讨论缺少评审时会在首次请求前拒绝。
+
+## Windows 下载与启动
+
+到 [v0.6.0-windows.1 发行页面](https://github.com/XSY-28/Cothink-release/releases/tag/v0.6.0-windows.1) 下载与你的系统匹配的 `windows-x64.zip` 或 `windows-arm64.zip`（完整文件名包含版本），并用同页 SHA256SUMS 核对。不要选 GitHub 自动生成的 Source code 压缩包，它不包含离线依赖和启动脚本。
+
+先安装 Node.js ≥22.19 和 Git for Windows。将 ZIP 完整解压，在 Windows Terminal 的 PowerShell 中进入该文件夹：
+
+```powershell
+.\install.cmd
+.\cothink.cmd init
+.\cothink.cmd
+```
+
+安装通过 Windows tar.exe 展开随包锁定依赖，不调用 npm、不执行安装生命周期脚本、不联网，也不改 PowerShell 执行策略。所有程序文件在解压目录中，支持中文与空格路径。已有配置和历史继续使用 `$HOME\.cothink`；可用 `$env:COTHINK_HOME = 'D:\CoThink 数据'` 指定其他目录。升级时解压新版本，先退出旧程序，再运行新目录的安装与启动脚本，不删除数据目录。
+
+从实际项目目录启动时，用 `& 'D:\CoThink\cothink.cmd'`，当前项目目录保持不变。Enter 发送，Ctrl+J 换行，Ctrl+Shift+V 粘贴；Shift+Enter 由 Pi 原生 Windows 键盘识别，终端无法区分时请用 Ctrl+J。应用内选区松开后顺序写入 Windows 原生剪贴板，写入完成后才提示成功。
+
+Windows PowerShell 5.1 的中文管道请明确 UTF-8：
+
+```powershell
+$OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+[Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+Get-Content -Raw -Encoding UTF8 .\question.txt | & 'D:\CoThink\cothink.cmd'
+```
+
+GitHub Actions 验证范围及实际结果见 [VALIDATION.md](VALIDATION.md)。Windows 原生组件与自动化控制台检查不代替中文输入法、实体键盘和各款终端的现场体验。Windows 用户目录的权限依靠 ACL；POSIX 0600/0700 不等同于 Windows ACL。Git 执行位由已有版本保留，新 Windows 文件默认非可执行；Windows 文件系统上的 chmod 不作为执行位变更接纳。Shell 仍在 Linux Docker 中运行，宿主 PowerShell 不获模型执行权限；Windows Docker 环境尚未现场验收。
 
 ## 提问、取消与历史
 
@@ -91,7 +118,7 @@ cothink show <任务ID> --all
 
 切换主模型时，原主模型会回到副模型列表：选择已有副模型则交换两者的位置；选择名单外的新模型则把原主模型放到副模型第一位。模型已有设置和其他副模型的相对顺序保留；删除模型使用「删除副模型」。
 
-`-c` 继续当前目录最近会话，`-r` 打开选择器。运行时新输入保留为草稿，不自动排队。多行粘贴中的命令文字保留为材料；小于 40×12 时暂停发送。选中文字使用 macOS 原生剪贴板顺序复制，写入完成后才确认。
+`-c` 继续当前目录最近会话，`-r` 打开选择器。运行时新输入保留为草稿，不自动排队。多行粘贴中的命令文字保留为材料；小于 40×12 时暂停发送。选中文字使用 macOS／Windows 原生剪贴板顺序复制，写入完成后才确认。
 
 直接 `!` Shell 与手动压缩入口仍关闭。工作中的 Shell 使用受管 Pi 工具。
 

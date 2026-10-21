@@ -1,0 +1,64 @@
+name: Verify published Windows download
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Published release tag to verify
+        required: true
+        default: v0.6.0-windows.1
+        type: string
+permissions:
+  contents: read
+jobs:
+  download:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            arch: x64
+          - os: windows-11-arm
+            arch: arm64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_tag }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.19.0
+          architecture: ${{ matrix.arch }}
+      - name: Download public assets, verify SHA256 and run the installed program
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          TARGET_ARCH: ${{ matrix.arch }}
+        run: |
+          $version = (Get-Content -Raw package.json | ConvertFrom-Json).version
+          $name = "CoThink-$version-windows-$env:TARGET_ARCH"
+          $base = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$([Uri]::EscapeDataString($env:RELEASE_TAG))"
+          $downloads = Join-Path $env:RUNNER_TEMP '公开下载 中文 test'
+          New-Item -ItemType Directory $downloads | Out-Null
+          # Intentionally no GitHub token or npm install: reproduce the public download.
+          Invoke-WebRequest "$base/$name.zip" -OutFile "$downloads/$name.zip"
+          Invoke-WebRequest "$base/SHA256SUMS.txt" -OutFile "$downloads/SHA256SUMS.txt"
+          $expected = Get-Content "$downloads/SHA256SUMS.txt" | Where-Object { $_.EndsWith("  $name.zip") }
+          if (@($expected).Count -ne 1) { throw 'Missing or ambiguous checksum' }
+          $actual = (Get-FileHash "$downloads/$name.zip" -Algorithm SHA256).Hash.ToLower()
+          if ($expected.Split(' ')[0] -ne $actual) { throw 'Download checksum mismatch' }
+          Expand-Archive "$downloads/$name.zip" -DestinationPath "$downloads/unpacked"
+          $folder = Join-Path "$downloads/unpacked" $name
+          & "$folder/install.cmd"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & "$folder/cothink.cmd" --version
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $package = Join-Path $folder 'app/package'
+          $env:COTHINK_TEST_CLI = "$package/bin/cothink.js"
+          node test/helpers/windows-installed.mjs $package
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          node --test test/pi-session.test.js
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          node test/helpers/pi-manual-terminal.mjs --smoke
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Write-Output "Verified public Windows $env:TARGET_ARCH download: $actual"

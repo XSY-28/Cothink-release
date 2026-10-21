@@ -1,0 +1,108 @@
+name: Windows release
+on:
+  push:
+    branches: [codex/windows-release]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  console:
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.19.0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - shell: pwsh
+        run: |
+          python -m pip install pywinpty==3.0.5 pyte==0.8.2
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python test/windows_conpty_checks.py --console-only
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+  windows:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            arch: x64
+          - os: windows-11-arm
+            arch: arm64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.19.0
+          architecture: ${{ matrix.arch }}
+      - name: Install fixed dependencies and verify Windows source
+        shell: pwsh
+        run: |
+          npm.cmd ci --ignore-scripts --no-audit --no-fund
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          npm.cmd run test:windows
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Pack the exact release archive
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          npm.cmd pack --ignore-scripts --json --pack-destination dist | Set-Content -Encoding utf8 dist/pack.json
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $pack = Get-Content -Raw dist/pack.json | ConvertFrom-Json
+          node scripts/windows-release.mjs "dist/$($pack[0].filename)"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $folder = (Get-ChildItem dist -Directory -Filter 'CoThink-*').FullName
+          "COTHINK_DOWNLOAD_FOLDER=$folder" >> $env:GITHUB_ENV
+      - name: Install the user download without npm or network
+        shell: pwsh
+        run: |
+          $install = Join-Path $env:RUNNER_TEMP 'CoThink 中文 test'
+          Copy-Item $env:COTHINK_DOWNLOAD_FOLDER $install -Recurse
+          & "$install/install.cmd"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & "$install/cothink.cmd" --version
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $package = Join-Path $install 'app/package'
+          "COTHINK_INSTALLED_PACKAGE=$package" >> $env:GITHUB_ENV
+          "COTHINK_TEST_CLI=$package/bin/cothink.js" >> $env:GITHUB_ENV
+      - name: Installed native clipboard round trip
+        shell: pwsh
+        run: |
+          node test/helpers/windows-installed.mjs "$env:COTHINK_INSTALLED_PACKAGE"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Installed CLI answers and history
+        shell: pwsh
+        run: |
+          node --test test/pi-session.test.js
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          node test/helpers/pi-manual-terminal.mjs --smoke
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Compress the verified download
+        shell: pwsh
+        run: |
+          Compress-Archive -Path $env:COTHINK_DOWNLOAD_FOLDER -DestinationPath "$env:COTHINK_DOWNLOAD_FOLDER.zip"
+          Get-FileHash "$env:COTHINK_DOWNLOAD_FOLDER.zip" -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $([IO.Path]::GetFileName($_.Path))" } | Set-Content -Encoding utf8 dist/SHA256SUMS-${{ matrix.arch }}.txt
+      - uses: actions/setup-python@v5
+        if: matrix.arch == 'x64'
+        with:
+          python-version: '3.12'
+      - name: Windows ConPTY with the installed program
+        if: matrix.arch == 'x64'
+        shell: pwsh
+        run: |
+          python -m pip install pywinpty==3.0.5 pyte==0.8.2
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python test/windows_conpty_checks.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CoThink-windows-${{ matrix.arch }}
+          path: |
+            dist/*.zip
+            dist/SHA256SUMS-*.txt
+          if-no-files-found: error

@@ -4,6 +4,9 @@ import { mkdtempSync, mkdirSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir, homedir } from "node:os";
 import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import { randomUUID } from "node:crypto";
+import { createTeamConfig } from "../../src/teams.js";
 if (process.argv.includes("--keys")) {
   if (!process.stdin.isTTY) throw Error("请在交互终端运行 --keys");
   const labels = ["Return", "Shift+Return", "Ctrl+J"];
@@ -30,6 +33,7 @@ if (process.argv.includes("--keys")) {
   await new Promise(() => {});
 }
 const home = mkdtempSync(join(tmpdir(), "cothink-pi-manual-"));
+if (process.env.COTHINK_TEST_HOME_REPORT) writeFileSync(process.env.COTHINK_TEST_HOME_REPORT, home);
 let count = 0,
   mainCount = 0;
 const server = createServer(async (req, res) => {
@@ -60,7 +64,7 @@ await new Promise((r) => server.listen(0, "127.0.0.1", r));
 mkdirSync(join(home, "pi"), { recursive: true });
 writeFileSync(
   join(home, "config.json"),
-  JSON.stringify({
+  JSON.stringify(createTeamConfig({
     formatVersion: 2,
     ...(process.argv.includes("--skill-check")
       ? { piResources: { skills: [join(homedir(), ".pi/agent/skills/learning-coach")] } }
@@ -70,7 +74,7 @@ writeFileSync(
       { provider: "fixture", modelId: "r1" },
       { provider: "fixture", modelId: "r2" },
     ],
-  }),
+  }, "本地终端验收", randomUUID())),
 );
 writeFileSync(
   join(home, "pi", "models.json"),
@@ -107,7 +111,7 @@ process.stderr.write(
 const child = spawn(
   process.execPath,
   [
-    new URL("../../bin/cothink.js", import.meta.url).pathname,
+    process.env.COTHINK_TEST_CLI ?? fileURLToPath(new URL("../../bin/cothink.js", import.meta.url)),
     ...(smoke ? ["ask", "--json", "local fixture"] : []),
   ],
   {

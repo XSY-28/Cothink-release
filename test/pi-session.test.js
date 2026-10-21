@@ -1,9 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { fixture } from "./helpers/pi-fixture.js";
 import { saveConfig } from "../src/config.js";
-const cli = process.env.COTHINK_TEST_CLI ?? new URL("../bin/cothink.js", import.meta.url).pathname;
+const cli = process.env.COTHINK_TEST_CLI ?? fileURLToPath(new URL("../bin/cothink.js", import.meta.url));
 export function invoke(f, args, input = "") {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [cli, ...args], {
