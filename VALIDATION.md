@@ -1,6 +1,8 @@
 # npm 0.6.0-windows.2 候选验证
 
-发行打包只删除消费者不需要的开发overrides，保留已锁定SDK字节。使用同一个候选包验证Windows x64/ARM64与macOS的正常全局安装（空配置和缓存、正常生命周期），包括真实npm命令入口、patched SDK、esbuild平台二进制、localhost与Windows原生剪贴板/ConPTY。完成registry与latest核验前不宣称已发布。
+发行打包只删除消费者不需要的开发 overrides，保留已锁定 SDK 字节。[候选 CI](https://github.com/XSY-28/Cothink-release/actions/runs/39573483903) 已通过：同一个 npm 包在 Windows x64、Windows ARM64 和 macOS ARM64 上正常全局安装，使用空配置、空缓存和默认生命周期脚本。验证实际命令入口、patched SDK、esbuild 平台二进制与 localhost 三次讨论；Windows 另测原生剪贴板，x64 另测 ConPTY 及本地 prefix 安装。
+
+该候选的 SHA-256 为 `05a6f4af63b4872fdd5237073957b8a366504a8b29ab5a48e0ae4b74bb736028`。npm 已接收发布，当前仍在后台校验；公开 registry、latest 与匿名安装尚待复验，完成前 Windows 可继续使用已验证的 GitHub ZIP。
 
 # Windows 0.6.0-windows.1 发行验证
 
@@ -25,7 +27,7 @@
 
 ## 尚未验证
 
-物理中文输入法、具体终端的实体键盘/鼠标体验、人工跨应用粘贴、Windows Docker Desktop Linux 容器与真实服务商生成仍须分别验收。Shell 保持 Linux 容器隔离，不回退到宿主 PowerShell。Windows ACL 与 POSIX 0600/0700 不是同一权限机制。npm latest 暂仍为旧版；Windows 使用 GitHub ZIP。
+物理中文输入法、具体终端的实体键盘/鼠标体验、人工跨应用粘贴、Windows Docker Desktop Linux 容器与真实服务商生成仍须分别验收。Shell 保持 Linux 容器隔离，不回退到宿主 PowerShell。Windows ACL 与 POSIX 0600/0700 不是同一权限机制。npm 发布状态与安装验证见本文开头。
 
 ---
 
@@ -35,11 +37,11 @@
 
 开发源码完整166/166、终端17+40+6通过；独立安装入口9/9，21运行模块与源码相同。实际安装命令的8组模式CLI/PTY检查包括零调用幂等切换、连续单模型、临时覆盖、多行材料、reload/resume/clone/fork/tree、新对话重置、旧会话默认、运行中冻结和写入失败阻断/重开恢复。40×12 检查解释完整同步重绘后的可见屏幕，输入草稿后仍有模式提示；不是搜索旧输出中的标签。
 
-本轮只同步源码与测试，不发布 npm 或创建 GitHub Release。模式功能没有新增收费模型验收；localhost 和 PTY 不代替真实模型质量、物理 Terminal/IME 或 CI 结论。原始失败与修正保留于独立开发证据中，个人路径、配置与恢复备份不进入仓库。
+上述为模式功能当时的验证记录。模式功能没有新增收费模型验收；localhost 和 PTY 不代替真实模型质量、物理 Terminal/IME 或 CI 结论。原始失败与修正保留于独立开发证据中，个人路径、配置与恢复备份不进入仓库。
 
 ## npm 分发
 
-已公开的 npm 包为0.5.0-packages.1包管理版，尚不包含上述未发布模式切换。分发配置取消private标记，包内容仍由明确files清单及bundledDependencies限定，不包含测试数据、凭据或私有开发记录。
+首次 npm 公开版本为 0.5.0-packages.1 包管理版；当前版本状态见本文开头。分发配置取消 private 标记，包内容仍由明确files清单及bundledDependencies限定，不包含测试数据、凭据或私有开发记录。
 
 发布验收分别检查固定tarball的内容/完整性、没有忽略生命周期脚本的普通全局安装、实际命令入口，以及发布后无登录环境从registry安装。npm的latest标签用于默认安装；预览状态和macOS支持范围保持。新增分发入口不构成对其他系统、任意Pi插件或真实模型质量的验证。
 
@@ -88,6 +90,6 @@ Pi 迁移阶段已做 Kimi K3 / DeepSeek Flash 真实问答验证；失败与费
 
 当前支持原生技能、模板和已审查纯 UI 资源；技能加载/展开/刷新与预载机制有检查。普通问答是否正确理解和运用预载技能，仍需独立内容验收。旧网页插件、MCP adapter、plannotator 的加载/注册记录不代表当前兼容：新宿主对未适配扩展在加载前拒绝。
 
-未做陌生用户、另一台机器、其他平台或 CI 验收；没有本次新付费调用。未以真实丢响应重复执行来验证未知远端请求恢复；已有确定性故障测试不等于服务商现场故障。Docker 保证限于可信本地宿主和已验负向样本，不声称覆盖任意容器逃逸。
+上述历史记录当时未做陌生用户、另一台机器、其他平台或 CI 验收；本轮 Windows 与 npm CI 结果见本文开头。没有本次新付费调用。未以真实丢响应重复执行来验证未知远端请求恢复；已有确定性故障测试不等于服务商现场故障。Docker 保证限于可信本地宿主和已验负向样本，不声称覆盖任意容器逃逸。
 
 原始请求、个人配置、失败日志和完整开发历史留在私有归档，未随源码发布。此处公开摘要用于说明证据边界，不能代替独立复测。许可证和文档整理本身不增加产品能力。

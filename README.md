@@ -10,6 +10,8 @@ CoThink 基于 Pi 开发，可复用 Pi 社区的技能（Skills）、提示模�
 
 需要 Node.js ≥22.19、npm 和 Git。
 
+`0.6.0-windows.2` 已提交 npm，正在等待 registry 后台校验完成；默认安装目前仍可能得到旧版。Windows 可先使用下方已公开的 ZIP。
+
 安装最新版：
 
 ```sh
