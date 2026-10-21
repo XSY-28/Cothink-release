@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Published npm version; empty builds the candidate
+        description: Expected npm latest version; empty builds the candidate
         type: string
         default: ''
 permissions:
@@ -67,7 +67,10 @@ jobs:
           New-Item -ItemType File $env:npm_config_userconfig,$env:npm_config_globalconfig | Out-Null
           if ($env:REGISTRY_VERSION) {
             if ($env:REGISTRY_VERSION -notmatch '^\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$') { throw 'Invalid version' }
-            $target = "cothink-v2@$env:REGISTRY_VERSION"
+            $resolved = npm.cmd view cothink-v2 version
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+            if ($resolved -ne $env:REGISTRY_VERSION) { throw 'Unexpected npm latest version' }
+            $target = 'cothink-v2'
           } else { $target = (Get-ChildItem candidate/dist/*.tgz).FullName }
           npm.cmd install --global --prefix $prefix --no-audit --no-fund $target
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
@@ -95,7 +98,8 @@ jobs:
           export npm_config_globalconfig="$RUNNER_TEMP/empty-global.npmrc"
           touch "$npm_config_userconfig" "$npm_config_globalconfig"
           if [ -n "$REGISTRY_VERSION" ]; then
-            target="cothink-v2@$REGISTRY_VERSION"
+            test "$(npm view cothink-v2 version)" = "$REGISTRY_VERSION"
+            target="cothink-v2"
           else
             target="$(find "$PWD/candidate/dist" -name '*.tgz')"
           fi
