@@ -1,3 +1,7 @@
+# npm 0.6.0-windows.2 候选验证
+
+发行打包只删除消费者不需要的开发overrides，保留已锁定SDK字节。使用同一个候选包验证Windows x64/ARM64与macOS的正常全局安装（空配置和缓存、正常生命周期），包括真实npm命令入口、patched SDK、esbuild平台二进制、localhost与Windows原生剪贴板/ConPTY。完成registry与latest核验前不宣称已发布。
+
 # Windows 0.6.0-windows.1 发行验证
 
 目标环境为 Windows Terminal + PowerShell，Node.js 最低版本 22.19.0。Windows ZIP 使用 runner 上构建的锁定依赖，安装器直接解压运行包，不经过 npm 二次解析；支持中文和空格目录，并保留调用者的项目目录。
