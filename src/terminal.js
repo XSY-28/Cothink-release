@@ -19,10 +19,12 @@ export function openTerminal({ platform = process.platform, env = process.env,
   };
   try {
     // Windows raw mode needs write access to CONIN$ even though we only read keys.
-    readFd = openSync(platform === 'win32' ? '\\\\.\\CONIN$' : '/dev/tty', platform === 'win32' ? 'r+' : 'r');
+    // Buffer paths bypass Node 22's UNC normalization, which otherwise appends
+    // a trailing slash to these device names and makes CreateFile fail.
+    readFd = openSync(platform === 'win32' ? Buffer.from('\\\\.\\CONIN$') : '/dev/tty', platform === 'win32' ? 'r+' : 'r');
     input = new ReadStream(readFd);
     // libuv also reads the output buffer's size/mode while creating WriteStream.
-    writeFd = openSync(platform === 'win32' ? '\\\\.\\CONOUT$' : '/dev/tty', platform === 'win32' ? 'r+' : 'w');
+    writeFd = openSync(platform === 'win32' ? Buffer.from('\\\\.\\CONOUT$') : '/dev/tty', platform === 'win32' ? 'r+' : 'w');
     output = new WriteStream(writeFd);
     return { input, output, close };
   } catch {

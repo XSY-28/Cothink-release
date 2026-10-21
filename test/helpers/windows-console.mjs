@@ -15,7 +15,7 @@ if (process.argv.includes('--probe')) {
     for (const [name, Stream] of [['\\\\.\\CONIN$', ReadStream], ['\\\\.\\CONOUT$', WriteStream]]) {
       let fd, stream;
       try {
-        fd = openSync(name, 'r+');
+        fd = openSync(Buffer.from(name), 'r+');
         console.error(JSON.stringify({ name, fd, isTTY: isatty(fd) }));
         stream = new Stream(fd);
         stream.setRawMode?.(true);
