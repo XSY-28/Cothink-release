@@ -1,8 +1,10 @@
-# npm 0.6.0-windows.2 候选验证
+# npm 0.6.0-windows.2 发行验证
 
 发行打包只删除消费者不需要的开发 overrides，保留已锁定 SDK 字节。[候选 CI](https://github.com/XSY-28/Cothink-release/actions/runs/39573483903) 已通过：同一个 npm 包在 Windows x64、Windows ARM64 和 macOS ARM64 上正常全局安装，使用空配置、空缓存和默认生命周期脚本。验证实际命令入口、patched SDK、esbuild 平台二进制与 localhost 三次讨论；Windows 另测原生剪贴板，x64 另测 ConPTY 及本地 prefix 安装。
 
-该候选的 SHA-256 为 `05a6f4af63b4872fdd5237073957b8a366504a8b29ab5a48e0ae4b74bb736028`。npm 已接收发布，当前仍在后台校验；公开 registry、latest 与匿名安装尚待复验，完成前 Windows 可继续使用已验证的 GitHub ZIP。
+该候选的 SHA-256 为 `05a6f4af63b4872fdd5237073957b8a366504a8b29ab5a48e0ae4b74bb736028`。npm 后台校验已完成；公开 registry 的版本与 `latest` 均为 `0.6.0-windows.2`，SHA-512 integrity 和 SHA-1 shasum 与已验候选一致。[公开 registry 安装复验](https://github.com/XSY-28/Cothink-release/actions/runs/39586860186) 的 Windows x64、Windows ARM64、macOS ARM64 三个任务全部通过：直接安装不带版本号的 `cothink-v2`，验证默认 `latest`、npm 命令、SDK、原生依赖与上述运行行为。没有登录 npm 或使用私有 registry 凭据。
+
+[首次 registry 复验](https://github.com/XSY-28/Cothink-release/actions/runs/39586403627) 中 ARM64/macOS 通过，x64 安装与功能检查通过后，ConPTY 测试在轮询原子更新的任务文件时遇到临时 `PermissionError`。测试现仅在原 40 秒时限内等待文件可读，持续拒绝仍超时失败、损坏 JSON 仍报错；两条 completed 任务、原输入、详情、模式与退出断言均保留。随后复验通过，npm 包与候选内容未改。
 
 # Windows 0.6.0-windows.1 发行验证
 
