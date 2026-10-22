@@ -13,6 +13,8 @@ if (!npm) throw Error('Use npm run pack:npm -- <output-directory>');
 const scratch = mkdtempSync(join(tmpdir(), 'cothink-npm-pack-'));
 const run = (command, args, cwd) => execFileSync(command, args, {
   cwd, stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024,
+  // macOS bsdtar otherwise stores extended attributes as ._* AppleDouble files.
+  env: { ...process.env, COPYFILE_DISABLE: '1' },
 });
 try {
   mkdirSync(output, { recursive: true });
