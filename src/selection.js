@@ -1,5 +1,32 @@
 import { SelectList, Text, matchesKey, truncateToWidth } from "@earendil-works/pi-tui";
+import { LoginDialogComponent } from "@earendil-works/pi-coding-agent";
 import { safeText } from "./terminal.js";
+
+/** Native masked input, with its input buffer cleared on every exit. */
+export async function promptSecret(ui, field) {
+  if (field.signal?.aborted) return undefined;
+  return ui.custom((tui, _theme, _keys, done) => {
+    let settled = false;
+    const finish = value => {
+      if (settled) return;
+      settled = true;
+      field.signal?.removeEventListener("abort", abort);
+      dialog.input.setValue("");
+      done(value);
+    };
+    const dialog = new LoginDialogComponent(tui, "CoThink", () => finish(undefined), undefined, "配置认证 · 输入内容不会显示");
+    const abort = () => dialog.cancel();
+    dialog.dispose = () => {
+      field.signal?.removeEventListener("abort", abort);
+      dialog.input.setValue("");
+      if (!settled) dialog.cancel();
+    };
+    dialog.showPrompt(safeText(field.message ?? "API key"), undefined, true).then(finish, () => finish(undefined));
+    field.signal?.addEventListener("abort", abort, { once: true });
+    if (field.signal?.aborted) queueMicrotask(abort);
+    return dialog;
+  });
+}
 
 /** A viewport for CoThink management lists; values stay independent of displayed text. */
 export function selectOption(ui, title, options) {
