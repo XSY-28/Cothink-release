@@ -89,7 +89,10 @@ for scenario in os.environ.get('COTHINK_PTY_SCENARIOS','startup,settings,setting
     wait(lambda:len(calls)==2);send('next draft\r');time.sleep(.1);pump();assert len(calls)==2
     send('\x0f');wait(lambda:b'DRAFT_SECRET' in transcript);assert '· running'.encode() in transcript,'live details should use the active task state';send('\x1b');time.sleep(.1);send('\x03');wait(lambda:any(r['status']=='cancelled' for r in records()));assert len(calls)==2
    else:
-    wait(lambda:any(r['status']=='completed' for r in records()));time.sleep(.15);pump();assert len(calls)==(5 if scenario=='work' else 3)
+    wait(lambda:any(r['status']=='completed' for r in records()))
+    # Saved completion and PTY delivery are independent; drain the complete final frame.
+    wait(lambda:b'FINAL_PUBLIC' in transcript and transcript.rfind(b'\x1b[?2026l')>transcript.rfind(b'FINAL_PUBLIC'))
+    assert len(calls)==(5 if scenario=='work' else 3)
     text=transcript.decode(errors='replace');assert 'DRAFT_SECRET' not in text and 'REVIEW_SECRET' not in text and 'HANDLING_SECRET' not in text,text[-4000:]
     assert 'FINAL_PUBLIC' in text
     if scenario=='startup':
