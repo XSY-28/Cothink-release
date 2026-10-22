@@ -10,7 +10,7 @@ CoThink 基于 Pi 开发，可复用 Pi 社区的技能（Skills）、提示模�
 
 需要 Node.js ≥22.19、npm 和 Git。
 
-当前源码版本为 `0.7.0-auth.1`。安装 registry 上的最新发布使用下面的 `npm install -g cothink-v2`；该版本在 npm 上的发布状态可在 [npm 页面](https://www.npmjs.com/package/cothink-v2) 查看。Windows Terminal + PowerShell 的命令见下方[安装说明](#windows-通过-npm-安装)。
+当前源码版本为 `0.7.0-auth.2`。安装 registry 上的最新发布使用下面的 `npm install -g cothink-v2`；该版本在 npm 上的发布状态可在 [npm 页面](https://www.npmjs.com/package/cothink-v2) 查看。Windows Terminal + PowerShell 的命令见下方[安装说明](#windows-通过-npm-安装)。
 
 安装最新版：
 
@@ -37,7 +37,7 @@ export PATH="$HOME/.local/bin:$PATH"
 
 ### 从源码运行
 
-当前版本 `0.7.0-auth.1` 包括添加模型时的内联认证（明确复用哪个服务商的认证，缺少 API key 时当场隐藏输入）、终端启动标识，以及 Team/模型长列表的滚动与缩放修复。GitHub 上的 `0.6.0-windows.1` ZIP 继续保留。
+当前版本 `0.7.0-auth.2` 包括添加模型时的内联认证（明确复用哪个服务商的认证，缺少 API key 时当场隐藏输入）、终端启动标识，以及 Team/模型长列表的滚动与缩放修复。GitHub 上的 `0.6.0-windows.1` ZIP 继续保留。
 
 GitHub 仓库和发行下载公开可读。
 

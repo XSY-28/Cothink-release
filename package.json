@@ -1,6 +1,6 @@
 {
   "name": "cothink-v2",
-  "version": "0.7.0-auth.1",
+  "version": "0.7.0-auth.2",
   "files": [
     "bin/cothink.js",
     "src/cli.js",
