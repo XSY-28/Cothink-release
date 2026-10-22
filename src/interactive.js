@@ -6,7 +6,7 @@ import {
   InteractiveMode,
   initTheme,
 } from "@earendil-works/pi-coding-agent";
-import { Text, matchesKey } from "@earendil-works/pi-tui";
+import { Text, matchesKey, rgbColor } from "@earendil-works/pi-tui";
 import { randomUUID } from "node:crypto";
 import { createRuntime, createModelRuntime, selectedResources } from "./pi-runtime.js";
 import { runTurn } from "./discussion.js";
@@ -513,7 +513,33 @@ export async function runInteractive({
         ui.onTerminalInput((data) =>
           data === "\x1b\r" ? { data: "\x1b[13;2u" } : undefined,
         );
-        ui.setHeader(() => new Text("CoThink", 1, 0));
+        ui.setHeader((tui, theme) => ({
+          invalidate() {},
+          render(width) {
+            // Keep the editor and budget visible on short/narrow terminals.
+            if (width < 80 || tui.terminal.rows < 24)
+              return new Text("CoThink", 1, 0).render(width);
+            const dot = process.env.NO_COLOR !== undefined
+              ? "██"
+              : theme.style("██", { fg: rgbColor(156, 189, 224) });
+            // Approved G1: 14 columns; the top and cursor share a right edge.
+            const logo = [
+              "▄█████████████",
+              "██            ",
+              "██            ",
+              "██            ",
+              "██            ",
+              "██            ",
+              "██            ",
+              "▀████████   " + dot,
+            ];
+            const lines = logo.map((line, index) => line + (
+              index === 2 ? "   CoThink" :
+              index === 4 ? "   Think. Question. Refine." : ""
+            ));
+            return new Text(lines.join("\n"), 1, 0).render(width);
+          },
+        }));
         if (rt) configState.value = rt.effectiveConfig;
         refreshTeamStatus();
         refreshModeStatus(rt?.singleModel ?? singleModel);
