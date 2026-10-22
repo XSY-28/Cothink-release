@@ -2,6 +2,7 @@
 import errno, fcntl, json, os, pty, select, signal, struct, subprocess, tempfile, termios, threading, time
 from pathlib import Path
 from helpers.team_fixture import team_config
+from helpers.terminal_screen import visible_rows
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -100,11 +101,20 @@ with tempfile.TemporaryDirectory(prefix='cothink-slash-') as folder:
         before_calls = len(calls)
         os.write(master, b'\x15/one pending question\r')
         wait(lambda: len(calls) == before_calls + 1)
+        before_config = (home / 'config.json').read_bytes()
         for text in ['/new', '/settings', '/team', '/models', '/model', '/unknown', '/local-test busy']:
             start = len(transcript)
             os.write(master, ('\x15' + text + '\r').encode())
-            wait(lambda: '任务仍在运行'.encode() in transcript[start:])
+            # CoThink-owned menus reject in beforeSubmit; native commands reach
+            # the SDK busy guard. Both must reject without opening or queuing.
+            marker = '当前任务或设置尚未结束' if text in ['/team', '/models', '/model'] else '任务仍在运行'
+            try:
+                wait(lambda: marker.encode() in transcript[start:])
+            except AssertionError as error:
+                raise AssertionError(text + '\n' + '\n'.join(visible_rows(transcript))) from error
             assert len(calls) == before_calls + 1
+            assert '选择 team' not in '\n'.join(visible_rows(transcript))
+            assert (home / 'config.json').read_bytes() == before_config
         os.write(master, b'\x03')
         wait(lambda: any(json.loads(p.read_text())['status'] == 'cancelled' for p in records()))
         hold.clear(); release.set()

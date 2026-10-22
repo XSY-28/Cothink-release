@@ -3,6 +3,7 @@ import errno, fcntl, hashlib, json, os, pty, select, signal, struct, subprocess,
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from team_fixture import team_config, TEAM_ID
+from terminal_screen import visible_rows
 ROOT = Path(__file__).resolve().parents[2]
 CLI = Path(os.environ.get('COTHINK_TEST_CLI', str(ROOT / 'bin/cothink.js')))
 B_ID = '7d51ceaf-2b56-4c1d-a34f-dd51da8b36c5'
@@ -104,7 +105,8 @@ with tempfile.TemporaryDirectory(prefix='cothink-team-pty-') as folder:
         s.command('/model','追加副模型');s.pick(4,'阵容没有变化');assert len(s.read()['teams'])==3
         # Native model cycle must follow the same editor and cancel cleanly.
         before=(home/'config.json').read_bytes();start=len(s.out);s.send('\x10');s.wait_text('追加副模型',start)
-        start=len(s.out);s.send('\x1b');s.wait_text('预算：纯答',start)
+        s.send('\x1b')
+        s.wait(lambda: '追加副模型' not in '\n'.join(visible_rows(s.out,42,140)) and '预算：纯答' in '\n'.join(visible_rows(s.out,42,140)))
         assert (home/'config.json').read_bytes()==before
         checks.append('canonical/alias/native model controls share save/cancel rules')
         for text in ['/team anything',' /team anything ', '/models anything']:

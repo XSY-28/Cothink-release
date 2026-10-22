@@ -29,6 +29,7 @@ import {
   markReleaseNotesSeen,
 } from "./storage.js";
 import { safeText } from "./terminal.js";
+import { selectOption, confirmOption } from "./selection.js";
 import {
   nativeCommands,
   nativeArgumentCommands,
@@ -308,7 +309,7 @@ export async function runInteractive({
   const modelIO = () => ({
     async select(title, options) {
       const labels = options.map(o => o.label);
-      const answer = await ui.select(safeText(title), labels.map(safeText));
+      const answer = await selectOption(ui, safeText(title), labels.map(safeText));
       return options[labels.map(safeText).indexOf(answer)]?.id;
     },
     async prompt(field) {
@@ -320,7 +321,7 @@ export async function runInteractive({
   async function chooseModel(draft, role) {
     const models = current.modelRuntime.getModels().filter(m => (!m.type || m.type === "chat") && current.modelRuntime.hasConfiguredAuth(m.provider));
     const labels = models.map(m => `${m.provider}/${m.id}`);
-    const choice = await ui.select("选择模型（已有认证复用；新认证请先 /login）", [...labels, "配置服务商或模型"]);
+    const choice = await selectOption(ui, "选择模型（已有认证复用；新认证请先 /login）", [...labels, "配置服务商或模型"]);
     if (!choice) return null;
     if (choice === "配置服务商或模型")
       return selectModelRef({runtime:current.modelRuntime,home,io:modelIO(),role});
@@ -350,7 +351,7 @@ export async function runInteractive({
         draft.secondary.push(secondary);
       } else if (selected) draft = switchMainModel(draft, selected);
       while (true) {
-        const action = await ui.select(
+        const action = await selectOption(ui,
           safeText(`阵容编辑 · 主 ${modelLabel(draft.main)} · 副 ${draft.secondary.map(modelLabel).join("、") || "未选（保存前至少一位）"}`),
           [`主模型：${modelLabel(draft.main)}`, "追加副模型", "删除副模型", "重排副模型", "保存为新 team"],
         );
@@ -362,7 +363,7 @@ export async function runInteractive({
           else draft.secondary.push(ref);
         } else if (action === "删除副模型" || action === "重排副模型") {
           const labels = draft.secondary.map(modelLabel);
-          const choice = await ui.select(action === "删除副模型" ? "移除后后位自然补位" : "移到第一位（改变问答评审）", labels);
+          const choice = await selectOption(ui, action === "删除副模型" ? "移除后后位自然补位" : "移到第一位（改变问答评审）", labels);
           if (!choice) continue;
           const i = labels.indexOf(choice), [ref] = draft.secondary.splice(i,1);
           if (action === "重排副模型") draft.secondary.unshift(ref);
@@ -389,10 +390,10 @@ export async function runInteractive({
     finally { managing = false; }
   }
   async function teamMenu() {
-    if (managing) return;
+    if (busy || managing) { notify("当前任务或设置尚未结束，请先取消或等待。", "warning"); return; }
     try {
       const config = loadConfig(home);
-      const action = await ui.select(safeText(`Team · ${currentTeam() ? teamLabel(currentTeam()) : "此历史会话尚未绑定 team"}`),
+      const action = await selectOption(ui, safeText(`Team · ${currentTeam() ? teamLabel(currentTeam()) : "此历史会话尚未绑定 team"}`),
         ["选择 team", "新建 team", "基于当前 team 调整", "删除 team"]);
       if (!action) return;
       if (busy) { notify("当前任务尚未结束，请先取消或等待；未更改 team。", "warning"); return; }
@@ -400,19 +401,19 @@ export async function runInteractive({
       if (action === "基于当前 team 调整") return await modelsMenu();
       if (action === "选择 team") {
         const labels = config.teams.map(t => safeText(teamLabel(t) + (t.id === currentTeam()?.id ? "（当前）" : "")));
-        const choice = await ui.select("选择 team（下一条生效）", labels);
+        const choice = await selectOption(ui, "选择 team（下一条生效）", labels);
         if (!choice) return;
         const team = config.teams[labels.indexOf(choice)];
         if (team) await applyTeamSelection(team);
       } else if (action === "删除 team") {
         const labels = config.teams.map(t => safeText(teamLabel(t) + (config.teams.length <= 1 ? "（至少保留一个，不可删除）" : t.id === currentTeam()?.id ? "（当前，不可删除）" : "")));
-        const choice = await ui.select("删除 team（保留模型认证和历史）", labels);
+        const choice = await selectOption(ui, "删除 team（保留模型认证和历史）", labels);
         if (!choice) return;
         const target = config.teams[labels.indexOf(choice)];
         if (!target) return;
         const preview = removeTeam(loadConfig(home), {targetId:target.id,currentTeam:currentTeam()});
         const nextDefault = preview.teams.find(t => t.id === preview.lastUsedTeamId);
-        const confirm = await ui.confirm(safeText(`删除 team「${target.name}」？`), safeText(`${teamLabel(target)}\n新对话默认：${nextDefault.name}；模型认证和历史保留。`));
+        const confirm = await confirmOption(ui, safeText(`删除 team「${target.name}」？`), safeText(`${teamLabel(target)}\n新对话默认：${nextDefault.name}；模型认证和历史保留。`));
         if (!confirm) return;
         if (busy) throw Error("当前任务尚未结束，未删除。");
         updateConfig(home, c => removeTeam(c, {targetId:target.id,currentTeam:currentTeam()}));
