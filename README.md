@@ -10,7 +10,7 @@ CoThink 基于 Pi 开发，可复用 Pi 社区的技能（Skills）、提示模�
 
 需要 Node.js ≥22.19、npm 和 Git。
 
-当前 npm `latest` 为 `0.7.0-auth.1`。Windows Terminal + PowerShell 的命令见下方[安装说明](#windows-通过-npm-安装)。
+当前源码版本为 `0.7.0-auth.1`。安装 registry 上的最新发布使用下面的 `npm install -g cothink-v2`；该版本在 npm 上的发布状态可在 [npm 页面](https://www.npmjs.com/package/cothink-v2) 查看。Windows Terminal + PowerShell 的命令见下方[安装说明](#windows-通过-npm-安装)。
 
 安装最新版：
 
