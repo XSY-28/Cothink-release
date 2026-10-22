@@ -97,7 +97,8 @@ with tempfile.TemporaryDirectory(prefix='cothink-selectors-') as folder:
         # Both model selection routes and new-Team creation share the viewport.
         s.command('/models', '追加副模型'); s.pick(1, '选择模型'); s.send('\x1b[F\r'); s.see('副服务商')
         s.send('\x1b[F'); s.selected('自定义服务商'); s.record('provider list tail')
-        s.close_menu(); assert (home / 'config.json').read_bytes() == original
+        # Cancelling provider setup returns to the unsaved roster, then Esc closes that editor.
+        s.send('\x1b'); s.see('保存为新 team'); s.close_menu(); assert (home / 'config.json').read_bytes() == original
         s.command('/team', '选择 team'); s.pick(1, '选择模型'); s.send('\x1b[F'); s.selected('配置服务商或模型'); s.record('new team model list'); s.close_menu()
         # Long team titles, selection and deletion lists cannot cover their controls.
         s.command('/team', '选择 team'); s.record('long team title bounded'); s.pick(0, '选择 team（下一条生效）')

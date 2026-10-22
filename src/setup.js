@@ -1,6 +1,7 @@
 import { copyFileSync, existsSync, readFileSync, chmodSync } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
+import { CredentialSynchronizationError } from "@earendil-works/pi-coding-agent";
 import { saveConfig, loadConfig, updateConfig, validateConfig, credentials } from "./config.js";
 import { createModelRuntime } from "./pi-runtime.js";
 import { privateDirectory, writePrivateJson, writePrivateBytes } from "./storage.js";
@@ -90,6 +91,56 @@ export async function validateModelRefs(config, runtime, { singleModel = false }
   }
   return config;
 }
+async function authValue(io, prompt, signal) {
+  signal?.throwIfAborted();
+  prompt.signal?.throwIfAborted();
+  const value = prompt.type === "select"
+    ? await io.select(prompt.message, prompt.options)
+    : await io.prompt(prompt);
+  signal?.throwIfAborted();
+  prompt.signal?.throwIfAborted();
+  if (value == null) throw new DOMException("已取消认证", "AbortError");
+  if (prompt.type === "secret" && !String(value).trim())
+    throw Object.assign(Error("API key 不能为空；未保存认证。"), { code: "AUTH_EMPTY" });
+  return prompt.type === "secret" ? String(value).trim() : value;
+}
+
+/** Credentials remain provider-owned; notices and model references never contain keys. */
+export async function ensureProviderAuth({ runtime, provider, io, signal }) {
+  signal?.throwIfAborted();
+  const source = runtime.getProvider(provider);
+  if (!source) throw Error("服务商不可用");
+  const label = source.name && source.name !== provider ? `${source.name}（${provider}）` : provider;
+  if (runtime.hasConfiguredAuth(provider)) {
+    const status = runtime.getProviderAuthStatus(provider);
+    const auth = runtime.isUsingOAuth(provider) ? "OAuth 登录" :
+      status.source === "environment" ? `环境认证${status.label ? `：${status.label}` : ""}` :
+      source.auth?.apiKey ? `${status.source === "stored" ? "已保存" : "已配置"}的 API key` : "已配置认证";
+    io.notify?.(`将复用 ${label} 的${auth}。`);
+    return;
+  }
+  const method = source.auth?.apiKey?.login ? "api_key" : source.auth?.oauth?.login ? "oauth" : null;
+  if (!method) throw Error(`${label} 需要配置其环境认证；此服务商不提供交互式 API key 登录。`);
+  io.notify?.(`${label} 尚未配置认证；${method === "api_key" ? "请在此输入 API key（隐藏输入）" : "请完成 OAuth 登录"}。`);
+  try {
+    await runtime.login(provider, method, {
+      signal,
+      prompt: prompt => authValue(io, { ...prompt, message: `${label} · ${prompt.message}` }, signal),
+      notify: event => io.notify?.(event.type === "device_code"
+        ? `${event.verificationUri}\n验证码：${event.userCode}`
+        : [event.message, event.url, event.instructions].filter(Boolean).join("\n")),
+    });
+  } catch (error) {
+    if (signal?.aborted || error.name === "AbortError") throw new DOMException("已取消认证", "AbortError");
+    if (error.code === "AUTH_EMPTY") throw error;
+    if (error instanceof CredentialSynchronizationError)
+      throw Error(`${label} 的认证已保存，但本地模型状态同步失败；请重新打开对话后继续添加。`);
+    // Provider/storage errors can contain credentials. Never echo them into the UI.
+    throw Error(`${label} 的认证未完成；请检查服务商认证方式和本机存储权限。当前 Team 未更改。`);
+  }
+  io.notify?.(`已保存 ${label} 的${method === "api_key" ? " API key" : " OAuth 登录"}；后续选择该服务商会复用。`);
+}
+
 export async function selectModelRef({ runtime, home, io, role, signal }) {
   const providers = runtime
     .getProviders()
@@ -97,7 +148,7 @@ export async function selectModelRef({ runtime, home, io, role, signal }) {
     .map((p) => ({ id: p.id, label: p.name ?? p.id }));
   providers.push({ id: "custom", label: "自定义服务商" });
   const provider = await io.select(`${role}服务商`, providers);
-  if (!provider) throw Error("已取消设置");
+  if (!provider) throw new DOMException("已取消设置", "AbortError");
   if (provider === "custom") {
     const providerId = await io.prompt({ type: "text", message: "自定义配置 ID" }),
       baseUrl = await io.prompt({ type: "text", message: "API 根地址" }),
@@ -118,7 +169,13 @@ export async function selectModelRef({ runtime, home, io, role, signal }) {
     const path = join(home, "pi", "models.json");
     let models = { providers: {} };
     if (existsSync(path)) models = JSON.parse(readFileSync(path, "utf8"));
-    if (models.providers?.[providerId]) throw Error("该服务商配置 ID 已存在，请使用现有服务商");
+    if (models.providers?.[providerId] || runtime.getProvider(providerId) || runtime.getProviderAuthStatus(providerId).configured)
+      throw Error("该服务商或认证 ID 已存在，请使用现有服务商，或为新地址选择不同的配置 ID。");
+    // Collect the secret before publishing the catalog so cancellation leaves no provider behind.
+    const key = await authValue(io, { type: "secret", message: `${providerId} · API key（隐藏输入）`, signal }, signal);
+    // Input can take minutes. Preserve catalog changes made by another window in the meantime.
+    models = existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : { providers: {} };
+    if (models.providers?.[providerId]) throw Error("该服务商配置 ID 已被其他窗口添加；未保存新认证，请重新选择。");
     models.providers ??= {};
     models.providers[providerId] = {
       baseUrl,
@@ -137,27 +194,12 @@ export async function selectModelRef({ runtime, home, io, role, signal }) {
     };
     writePrivateJson(path, models);
     await runtime.refresh({ allowNetwork: false });
-    await runtime.login(providerId, "api_key", {
-      signal,
-      prompt: (p) => io.prompt(p),
-      notify: (e) => io.notify?.(e.message ?? e.url ?? ""),
-    });
+    await ensureProviderAuth({ runtime, provider: providerId, signal, io: { ...io, prompt: async () => key } });
     return { provider: providerId, modelId };
   }
   const source = runtime.getProvider(provider);
   if (!source) throw Error("服务商不可用");
-  if (!runtime.hasConfiguredAuth(provider)) {
-    const methods = ["api_key", "oauth"]
-      .filter((type) => source.auth?.[type === "api_key" ? "apiKey" : "oauth"]?.login)
-      .map((id) => ({ id, label: id === "api_key" ? "API Key（隐藏输入）" : "OAuth 登录" }));
-    if (!methods.length) throw Error("该服务商需要先配置其环境认证");
-    const auth = methods.length === 1 ? methods[0].id : await io.select("认证方式", methods);
-    await runtime.login(provider, auth, {
-      signal,
-      prompt: (p) => io.prompt(p),
-      notify: (e) => io.notify?.(e.message ?? e.url ?? ""),
-    });
-  }
+  await ensureProviderAuth({ runtime, provider, io, signal });
   const modelId = await io.select(
     `${role}模型`,
     runtime
@@ -165,7 +207,7 @@ export async function selectModelRef({ runtime, home, io, role, signal }) {
       .filter((m) => !m.type || m.type === "chat")
       .map((m) => ({ id: m.id, label: m.name ?? m.id })),
   );
-  if (!modelId) throw Error("已取消设置");
+  if (!modelId) throw new DOMException("已取消设置", "AbortError");
   const ref = { provider, modelId };
   const model = runtime.getModel(provider, modelId);
   if (model.api === "anthropic-messages")

@@ -29,7 +29,7 @@ import {
   markReleaseNotesSeen,
 } from "./storage.js";
 import { safeText } from "./terminal.js";
-import { selectOption, confirmOption } from "./selection.js";
+import { selectOption, confirmOption, promptSecret } from "./selection.js";
 import {
   nativeCommands,
   nativeArgumentCommands,
@@ -39,6 +39,7 @@ import {
   modelsAutocomplete,
   parseTurnInput,
   selectModelRef,
+  ensureProviderAuth,
   validateModelRefs,
 } from "./setup.js";
 export async function runInteractive({
@@ -306,6 +307,7 @@ export async function runInteractive({
     refreshTeamStatus();
     notify("当前 team：" + selected.name + "；从下一条任务生效。");
   }
+  let modelAuthNotice = "";
   const modelIO = () => ({
     async select(title, options) {
       const labels = options.map(o => o.label);
@@ -313,33 +315,41 @@ export async function runInteractive({
       return options[labels.map(safeText).indexOf(answer)]?.id;
     },
     async prompt(field) {
-      if (field.type === "secret") throw Error("新认证请先使用 /login，再创建 team；已有认证会复用。");
-      return ui.input(safeText(field.message ?? "请输入"));
+      if (field.type === "secret") return promptSecret(ui, field);
+      return ui.input(safeText(field.message ?? "请输入"), field.placeholder, { signal: field.signal });
     },
-    notify(message) { notify(message); },
+    notify(message) { modelAuthNotice = safeText(message); notify(message); },
   });
   async function chooseModel(draft, role) {
-    const models = current.modelRuntime.getModels().filter(m => (!m.type || m.type === "chat") && current.modelRuntime.hasConfiguredAuth(m.provider));
-    const labels = models.map(m => `${m.provider}/${m.id}`);
-    const choice = await selectOption(ui, "选择模型（已有认证复用；新认证请先 /login）", [...labels, "配置服务商或模型"]);
-    if (!choice) return null;
-    if (choice === "配置服务商或模型")
-      return selectModelRef({runtime:current.modelRuntime,home,io:modelIO(),role});
-    const model = models[labels.indexOf(choice)];
-    const saved = [draft.main, ...draft.secondary, configState.value.main, ...configState.value.secondary,
-      ...(loadConfig(home)?.teams ?? []).flatMap(t => [t.main, ...t.secondary])]
-      .find(r => r && r.provider === model.provider && r.modelId === model.id);
-    const ref = structuredClone(saved ?? {provider:model.provider,modelId:model.id});
-    if (model.api === "anthropic-messages" && ref.maxOutputTokens == null) {
-      const cap = await ui.input("此协议要求 maxOutputTokens，请明确额度");
-      if (!cap) return null;
-      ref.maxOutputTokens = Number(cap);
+    try {
+      const models = current.modelRuntime.getModels().filter(m => (!m.type || m.type === "chat") && current.modelRuntime.hasConfiguredAuth(m.provider));
+      const labels = models.map(m => `${m.provider}/${m.id}`);
+      const choice = await selectOption(ui, "选择模型（已有认证复用；新认证可在此配置）", [...labels, "配置服务商或模型"]);
+      if (!choice) return null;
+      if (choice === "配置服务商或模型")
+        return await selectModelRef({runtime:current.modelRuntime,home,io:modelIO(),role});
+      const model = models[labels.indexOf(choice)];
+      await ensureProviderAuth({ runtime: current.modelRuntime, provider: model.provider, io: modelIO() });
+      const saved = [draft.main, ...draft.secondary, configState.value.main, ...configState.value.secondary,
+        ...(loadConfig(home)?.teams ?? []).flatMap(t => [t.main, ...t.secondary])]
+        .find(r => r && r.provider === model.provider && r.modelId === model.id);
+      const ref = structuredClone(saved ?? {provider:model.provider,modelId:model.id});
+      if (model.api === "anthropic-messages" && ref.maxOutputTokens == null) {
+        const cap = await ui.input("此协议要求 maxOutputTokens，请明确额度");
+        if (!cap) return null;
+        ref.maxOutputTokens = Number(cap);
+      }
+      return ref;
+    } catch (error) {
+      modelAuthNotice = error.name === "AbortError" ? "" : safeText(error.message);
+      if (error.name !== "AbortError") notify(error.message, "error");
+      return null;
     }
-    return ref;
   }
   async function modelsMenu({selected, empty = false} = {}) {
     if (busy || managing) { notify("当前任务或设置尚未结束，请先取消或等待。", "warning"); return; }
     managing = true;
+    modelAuthNotice = "";
     try {
       let draft = structuredClone(configState.value);
       const originalKey = rosterKey(draft);
@@ -352,7 +362,7 @@ export async function runInteractive({
       } else if (selected) draft = switchMainModel(draft, selected);
       while (true) {
         const action = await selectOption(ui,
-          safeText(`阵容编辑 · 主 ${modelLabel(draft.main)} · 副 ${draft.secondary.map(modelLabel).join("、") || "未选（保存前至少一位）"}`),
+          safeText(`${modelAuthNotice ? modelAuthNotice + "\n" : ""}阵容编辑 · 主 ${modelLabel(draft.main)} · 副 ${draft.secondary.map(modelLabel).join("、") || "未选（保存前至少一位）"}`),
           [`主模型：${modelLabel(draft.main)}`, "追加副模型", "删除副模型", "重排副模型", "保存为新 team"],
         );
         if (!action) return;
