@@ -14,7 +14,9 @@ assert.ok([400, 3000].includes(holdMs));
 const dir = fs.mkdtempSync(join(tmpdir(), 'cothink-native-record-'));
 const dest = join(dir, '中文 request.json');
 fs.writeFileSync(dest, JSON.stringify({ text: 'old saved answer' }));
-const script = "$s=[IO.File]::Open($env:COTHINK_TEST_LOCK_PATH,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read); [Console]::WriteLine('LOCKED'); Start-Sleep -Milliseconds ([int]$env:COTHINK_TEST_LOCK_MS); $s.Dispose(); [Console]::WriteLine('RELEASED')";
+// Resolve the sleep API before taking the handle: first-use PowerShell cmdlet
+// loading after LOCKED would make a nominal 400ms hold last much longer.
+const script = "$duration=[int]$env:COTHINK_TEST_LOCK_MS; [Threading.Thread]::Sleep(0); $clock=[Diagnostics.Stopwatch]::new(); $s=[IO.File]::Open($env:COTHINK_TEST_LOCK_PATH,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read); $clock.Start(); [Console]::WriteLine('LOCKED'); [Threading.Thread]::Sleep($duration); $s.Dispose(); $clock.Stop(); [Console]::WriteLine('RELEASED:'+$clock.ElapsedMilliseconds)";
 const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
   env: { ...process.env, COTHINK_TEST_LOCK_PATH: dest, COTHINK_TEST_LOCK_MS: String(holdMs) },
   stdio: ['ignore', 'pipe', 'pipe'],
@@ -33,14 +35,23 @@ try {
     return ['EPERM', 'EACCES', 'EBUSY'].includes(e.code);
   }, 'the actual OS must reject rename while the lock is held');
   const started = performance.now();
-  if (holdMs === 400) writePrivateJson(dest, { text: '完整新回答' });
-  else assert.throws(() => writePrivateJson(dest, { text: 'not published' }), e => ['EPERM', 'EACCES', 'EBUSY'].includes(e.code));
+  let saveError;
+  try {
+    if (holdMs === 400) writePrivateJson(dest, { text: '完整新回答' });
+    else assert.throws(() => writePrivateJson(dest, { text: 'not published' }), e => ['EPERM', 'EACCES', 'EBUSY'].includes(e.code));
+  } catch (error) { saveError = error; }
   const operationMs = performance.now() - started;
+  if (holdMs === 400) await closed;
+  const observedHoldMs = Number(stdout.match(/RELEASED:(\d+)/)?.[1]) || null;
+  console.log(JSON.stringify({ platform: process.platform, holdMs, observedHoldMs,
+    lockError, operationMs, updated: !saveError && holdMs === 400,
+    oldBytesPreserved: !saveError && holdMs === 3000 }));
+  if (saveError) throw saveError;
+  if (holdMs === 400) assert.ok(observedHoldMs >= 400 && observedHoldMs < 1060,
+    'short lock fixture must actually release within the unchanged rename budget');
   const text = JSON.parse(fs.readFileSync(dest)).text;
   assert.equal(text, holdMs === 400 ? '完整新回答' : 'old saved answer');
   assert.deepEqual(fs.readdirSync(dir), ['中文 request.json']);
-  console.log(JSON.stringify({ platform: process.platform, holdMs, lockError,
-    operationMs, updated: holdMs === 400, oldBytesPreserved: holdMs === 3000 }));
 } finally {
   child.kill();
   await closed;

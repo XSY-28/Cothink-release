@@ -135,7 +135,7 @@ for (const holdMs of [400, 3000]) {
       const stdout = await new Promise((resolve, reject) => {
         childProcess.execFile(process.execPath, [fileURLToPath(helper), String(holdMs)],
           { env: process.env, timeout: 14000 }, (error, stdout, stderr) =>
-            error ? reject(Error(stderr || stdout || error.message)) : resolve(stdout));
+            error ? reject(Error([stdout, stderr, error.message].filter(Boolean).join('\n'))) : resolve(stdout));
       });
       const result = JSON.parse(stdout);
       assert.equal(result.platform, 'win32');
