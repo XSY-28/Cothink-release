@@ -6,9 +6,9 @@ export async function fixture(t, handler = () => ({ text: "fixture answer" })) {
   const home = mkdtempSync(join(tmpdir(), "cothink-pi-test-"));
   const calls = [];
   const server = createServer(async (req, res) => {
-    let raw = "";
-    for await (const c of req) raw += c;
-    const body = JSON.parse(raw);
+    const chunks = [];
+    for await (const c of req) chunks.push(c);
+    const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
     const call = { body, url: req.url, headers: req.headers };
     calls.push(call);
     try {

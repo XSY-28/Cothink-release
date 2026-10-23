@@ -18,6 +18,7 @@ import * as executor from '../packages/agent-sync/src/executor.js';
 import { tmpdir } from 'node:os';
 import { writePrivateJson } from '../src/storage.js';
 import { runTurn } from '../src/discussion.js';
+const realWait = Atomics.wait;
 
 function recordFile(t) {
   const dir = fs.mkdtempSync(path.join(tmpdir(), 'cothink-record-'));
@@ -32,9 +33,9 @@ function renameBoundary(t, handler, platform = 'win32') {
   const rename = fs.renameSync, waits = [];
   Object.defineProperty(process, 'platform', { value: platform });
   t.mock.method(fs, 'renameSync', (from, to) => handler(rename, from, to));
-  t.mock.method(Atomics, 'wait', (_array, _index, _value, delay) => {
+  t.mock.method(Atomics, 'wait', (array, index, value, delay) => {
     waits.push(delay);
-    return 'timed-out';
+    return realWait(array, index, value, delay);
   });
   syncBuiltinESMExports();
   t.after(() => { Object.defineProperty(process, 'platform', descriptor); t.mock.restoreAll(); syncBuiltinESMExports(); });
@@ -102,7 +103,6 @@ test('a transient Windows review-record rename failure completes the same three 
   const descriptor = Object.getOwnPropertyDescriptor(process, 'platform');
   const rename = fs.renameSync;
   let injected = 0;
-  t.mock.method(Atomics, 'wait', () => 'timed-out');
   t.mock.method(fs, 'renameSync', (from, to) => {
     if (path.dirname(to) === path.join(f.home, 'requests')) {
       const saved = JSON.parse(fs.readFileSync(from, 'utf8'));
@@ -128,6 +128,9 @@ test('a transient Windows review-record rename failure completes the same three 
 for (const holdMs of [400, 3000]) {
   test(`real Windows file sharing lock (${holdMs}ms) preserves atomic record publication`,
     { skip: process.platform !== 'win32', timeout: 15000 }, async t => {
+      const waitedAt = performance.now();
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 25);
+      assert.ok(performance.now() - waitedAt >= 20, 'native lock checks require real waiting');
       const dir = fs.mkdtempSync(path.join(tmpdir(), 'cothink-native-record-'));
       const dest = path.join(dir, '中文 request.json');
       fs.writeFileSync(dest, JSON.stringify({ text: 'old saved answer' }));
