@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { fixture } from "./helpers/pi-fixture.js";
+import { invoke as invokeBytes } from "./helpers/cli-fixture.js";
 import { saveConfig } from "../src/config.js";
 const cli = process.env.COTHINK_TEST_CLI ?? fileURLToPath(new URL("../bin/cothink.js", import.meta.url));
 export function invoke(f, args, input = "") {
@@ -56,3 +57,78 @@ test("partial print exits nonzero and does not print draft as final", async (t) 
   assert.match(result.stderr, /show|未完成/);
   assert.equal(f.calls.length, 2);
 });
+test("long streamed replies survive discussion, JSON export and history unchanged", async (t) => {
+  const text = '长回答 {"text":"引号和换行\\n"} 😄\n'.repeat(1800) + "LONG_REPLY_END";
+  const f = await fixture(t, (call, n, req, res) => {
+    res.writeHead(200, { "Content-Type": "text/event-stream" });
+    const chunk = (content, finish_reason = null) =>
+      res.write("data: " + JSON.stringify({
+        id: "long-reply",
+        object: "chat.completion.chunk",
+        model: call.body.model,
+        choices: [{ index: 0, delta: { content }, finish_reason }],
+      }) + "\n\n");
+    for (let i = 0; i < text.length; i += 512) chunk(text.slice(i, i + 512));
+    chunk("", "stop");
+    res.end("data: [DONE]\n\n");
+    return null;
+  });
+  saveConfig(f.home, { formatVersion: 2, ...f.models });
+  const run = await invokeBytes(f, ["ask", "--json", "长回答"]);
+  assert.equal(run.code, 0, run.stderr);
+  const result = JSON.parse(run.stdout);
+  assert.equal(result.taskEnd, "completed");
+  assert.equal(result.requests.length, 3);
+  for (const call of result.requests) {
+    assert.equal(call.text, text);
+    assert.equal(call.response.content[0].text, text);
+    assert.equal(call.limits.maxOutputTokens, null);
+    assert.ok(!("max_tokens" in call.payload));
+    assert.ok(!("max_completion_tokens" in call.payload));
+  }
+  const contentText = (content) => typeof content === "string"
+    ? content : content.filter((p) => p.type === "text").map((p) => p.text).join("\n");
+  const review = JSON.parse(contentText(f.calls[1].body.messages.findLast((m) => m.role === "user").content));
+  assert.equal(review.draft.text, text);
+  assert.ok(f.calls[2].body.messages.some((m) => m.role === "assistant" && contentText(m.content) === text));
+  const show = await invokeBytes(f, ["show", result.task.id]);
+  assert.equal(show.stdout.trimEnd(), text);
+  const saved = JSON.parse((await invokeBytes(f, ["show", result.task.id, "--json"])).stdout);
+  assert.deepEqual(saved.requests.map((r) => r.text), [text, text, text]);
+  assert.equal(f.calls.length, 3, "history never generates again");
+});
+for (const [phase, index] of [["draft", 1], ["review", 2], ["revision", 3]]) {
+  test(`provider default limit produces honest partial at ${phase}; explicit cap completes`, async (t) => {
+    const text = "完整长回答".repeat(1500) + "END";
+    let attemptCalls = 0;
+    const f = await fixture(t, (call, n) => {
+      const cap = call.body.max_tokens ?? call.body.max_completion_tokens;
+      return ++attemptCalls === index && cap === undefined
+        ? { text: text.slice(0, 4096), finish: "length" }
+        : { text };
+    });
+    saveConfig(f.home, { formatVersion: 2, ...f.models });
+    const run = await invokeBytes(f, ["ask", "--json", "长回答"]);
+    assert.equal(run.code, 1);
+    const result = JSON.parse(run.stdout);
+    assert.equal(result.taskEnd, "partial");
+    assert.equal(result.task.finalCallId, null);
+    assert.equal(f.calls.length, index, "no retry or later phase after truncation");
+    const last = result.requests.at(-1);
+    assert.equal(last.phase, phase);
+    assert.equal(last.text, text.slice(0, 4096));
+    assert.equal(last.response.stopReason, "length");
+    assert.match(result.task.error, /length/);
+    assert.match(result.task.error, /服务商默认/);
+    assert.match(run.stderr, /--max-output-tokens/);
+    const show = JSON.parse((await invokeBytes(f, ["show", result.task.id, "--json"])).stdout);
+    assert.equal(show.taskEnd, "partial");
+    assert.equal(show.requests.at(-1).text, last.text);
+    assert.equal(f.calls.length, index);
+    attemptCalls = 0;
+    const complete = await invokeBytes(f, ["ask", "--json", "--max-output-tokens", "32768", "长回答"]);
+    assert.equal(complete.code, 0, complete.stderr);
+    assert.equal(JSON.parse(complete.stdout).taskEnd, "completed");
+    assert.deepEqual(f.calls.slice(index).map((c) => c.body.max_tokens ?? c.body.max_completion_tokens), [32768, 32768, 32768]);
+  });
+}
