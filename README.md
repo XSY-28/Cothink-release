@@ -12,7 +12,7 @@ CoThink 基于 Pi 开发，可复用 Pi 社区的技能（Skills）、提示模�
 
 GitHub 修复预览版为 [`0.7.1-windows.1`](https://github.com/XSY-28/Cothink-release/releases/tag/v0.7.1-windows.1)，修复 Windows 请求记录短暂占用导致的保存失败，保留长回复诊断、认证和菜单功能。Windows 用户可下载 Release 的 x64 / ARM64 ZIP；macOS 可下载 `.tgz` 后用 `npm install -g ./cothink-v2-0.7.1-windows.1.tgz` 安装。
 
-当前 npm `latest` 为 `0.7.0-auth.2`。Windows Terminal + PowerShell 的命令见下方[安装说明](#windows-通过-npm-安装)。
+当前 npm `latest` 为 `0.7.1-windows.1`，包含上述 Windows 保存修复。Windows Terminal + PowerShell 的命令见下方[安装说明](#windows-通过-npm-安装)。
 
 安装最新版：
 
@@ -135,9 +135,9 @@ cothink show <任务ID> --all
 
 修改阵容后在编辑器选择「保存为新 team」，输入新名字；取消保留原组合。原生模型切换快捷键也使用这个流程。删除前确认名称与阵容，不能删除当前对话选择的 team，且至少保留一个（允许2→1、禁止1→0）。删除不删除模型、认证或历史；旧对话保留独立快照，已删除的组合不会自动回到列表。
 
-Team、模型和服务商菜单的长列表随选中项滚动。用 ↑/↓ 或鼠标滚轮移动，PageUp/PageDown 翻页，Home/End 跳到首尾，Enter 确认，Esc 取消；窗口缩放保留选中项。名称过长时仅缩略显示，选择仍对应完整模型或 team。此菜单修复已合入源码主线，尚未包含在上述 npm 版本中。
+Team、模型和服务商菜单的长列表随选中项滚动。用 ↑/↓ 或鼠标滚轮移动，PageUp/PageDown 翻页，Home/End 跳到首尾，Enter 确认，Esc 取消；窗口缩放保留选中项。名称过长时仅缩略显示，选择仍对应完整模型或 team。
 
-源码主线的终端启动页使用细线 C 和冷蓝方点标识，上横与方点右边缘对齐。至少 80×24 时显示完整标识，较小窗口使用紧凑标题；设置 `NO_COLOR` 时保持单色。新标识也尚未发布到 npm。
+终端启动页使用细线 C 和冷蓝方点标识，上横与方点右边缘对齐。至少 80×24 时显示完整标识，较小窗口使用紧凑标题；设置 `NO_COLOR` 时保持单色。
 
 已有 Pi v2 配置首次进入交互界面时，会要求为原阵容命名，升级前备份原字节，保留模型顺序、参数及全局工作/技能配置；取消不会发送问题。无终端的旧 `ask`/管道可暂时沿用原阵容，稍后通过 `cothink init` 升级。旧会话未记录完整 team 时仍可浏览，继续前需明确选择一个 team。
 

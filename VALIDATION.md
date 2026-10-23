@@ -6,7 +6,13 @@
 
 新增检查覆盖临时三类错误、持续拒绝、非 Windows/磁盘错误、授权失效、评审保存故障后三次模型调用与完整文本保持。真实 Windows 测试用独立进程持有未共享删除权限的文件句柄，分别检查短暂占用后的原子发布和持续占用下的失败保护。平台结果与固定候选信息见[该版本 Release](https://github.com/XSY-28/Cothink-release/releases/tag/v0.7.1-windows.1)。
 
-本地定向41项中38通过、0失败、3项Windows原生检查跳过；这不替代真实Windows证据。费用为零，本轮仅使用localhost回复、文件锁与本机Docker；未进行收费模型调用或物理键盘/IME验收。
+macOS 完整套件236项中233通过、0失败、3项Windows原生检查跳过；终端检查17 + 40 + 6项通过。[Windows 修复 CI](https://github.com/XSY-28/Cothink-release/actions/runs/39937145147) 在 x64/ARM64 上分别通过55项源码和7项安装入口检查，x64 ConPTY 通过；真实短锁结束后恢复保存，持续占用仍失败并保留旧记录。[公开 ZIP 下载安装](https://github.com/XSY-28/Cothink-release/actions/runs/39939372142) 两个架构通过。费用为零，本轮仅使用localhost回复、文件锁与本机Docker；未进行收费模型调用或物理键盘/IME验收。
+
+[npm 候选验证](https://github.com/XSY-28/Cothink-release/actions/runs/39940950467) 已通过：Windows x64、Windows ARM64、macOS ARM64 用同一个包，在空配置和空缓存中完成默认生命周期的全局安装，并验证实际命令、SDK、esbuild 和 localhost 三次讨论；Windows 另测原生剪贴板，x64 另测本地 prefix 和 ConPTY。候选 SHA-256 为 `dfa1a58f4091179e9785180728ade72bfbf7ff34e6b35a8224f9ba4ab6fd1f48`；34 个运行、提示与内核文件以及4个锁定SDK归档与发行源码逐字节一致。npm 的 Linux CI 归档与 GitHub 的 macOS 归档压缩字节不同，运行代码相同；既有 Release 资产保持原散列。
+
+npm 后台状态已确认为 `published`，公开版本和 `latest` 均为 `0.7.1-windows.1`；SHA-512 integrity、SHA-1 shasum 及匿名下载包的 SHA-256 与上述固定候选一致。本机命令已为同版，其34个运行文件与4个SDK归档也与 npm 包一致，原配置和历史保留。
+
+[公开 registry 安装复验](https://github.com/XSY-28/Cothink-release/actions/runs/39943725053) 的 Windows x64、Windows ARM64、macOS ARM64 全部通过：不登录 npm，在空配置、空缓存中直接安装不带版本号的 `cothink-v2`，确认默认 `latest`、实际命令、SDK、原生依赖和上述运行行为。Windows 原生剪贴板及 x64 本地 prefix / ConPTY 同时通过；没有收费模型调用。
 
 # 0.7.1-diagnostics.1：长回答截断诊断（2026-10-23）
 
@@ -22,7 +28,7 @@
 
 `codex/inline-model-auth` 已合入 `main`，版本 `0.7.0-auth.2`。公开 registry 的 `latest` 已指向该版本，tarball SHA-256 为 `3abdb8db480ff54df59e4bc43bda4d18a3c1f2f78700803bef4cbe30ea65d508`，与本地验证包一致；从 registry 重新安装后 5 组认证 PTY 通过，安装文件的 33 个运行/提示/内核路径与本机发布目录逐字节一致。
 
-`0.7.0-auth.1` 在 registry 侧留下了无法列出或批准的暂存记录，从未公开可安装，因此改用 `0.7.0-auth.2` 发布；版本号差异不代表代码差异。选择模型时说明复用哪个服务商的 API key、OAuth 或环境认证；缺少 API key 时在阵容编辑流程内隐藏输入，由 Pi SDK 保存，无需先退出到 `/login`；仅支持 OAuth 或环境认证的服务商按其支持方式处理。取消或空白输入不写密钥，原 Team 保留；自定义服务商须使用新配置 ID，不得覆盖已有服务商或孤立认证。
+`0.7.0-auth.1` 在当时发布验收中处于无法列出或批准的暂存状态，未能公开安装，因此改用 `0.7.0-auth.2` 发布；版本号差异不代表代码差异。选择模型时说明复用哪个服务商的 API key、OAuth 或环境认证；缺少 API key 时在阵容编辑流程内隐藏输入，由 Pi SDK 保存，无需先退出到 `/login`；仅支持 OAuth 或环境认证的服务商按其支持方式处理。取消或空白输入不写密钥，原 Team 保留；自定义服务商须使用新配置 ID，不得覆盖已有服务商或孤立认证。
 
 macOS 源码验证：完整套件 217 项中 216 通过、0 失败、1 项 Windows 原生检查跳过；`npm run test:terminal` 的 17、40、6 项通过。定向 65 项包含 25 项认证单元（复用来源、OAuth/环境认证、空值与取消/中断、自定义 ID 覆盖保护、写前重读、同步失败脱敏、掩码输入清理）及 5 组真实 CLI/PTY（已有认证复用、自定义服务商保存/取消/空白、既有未认证服务商内联保存）。全部管理操作零模型请求；PTY 检查确认密钥不回显，取消不修改 config、auth 与 models。
 
