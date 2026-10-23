@@ -62,8 +62,29 @@ export function writePrivateBytes(path, bytes, beforeCommit = () => {}) {
     fsyncSync(fd);
     closeSync(fd);
     fd = undefined;
-    beforeCommit();
-    renameSync(tmp, path);
+    // Windows readers that do not share delete access can briefly block rename.
+    // Retry only this already-flushed candidate, never unlink the destination or
+    // repeat a model request. Nine attempts wait at most 1060ms in total.
+    for (let attempt = 0; ; attempt++) {
+      beforeCommit();
+      try {
+        renameSync(tmp, path);
+        break;
+      } catch (error) {
+        if (
+          process.platform !== "win32" ||
+          !["EPERM", "EACCES", "EBUSY"].includes(error.code) ||
+          attempt >= 8
+        )
+          throw error;
+        Atomics.wait(
+          new Int32Array(new SharedArrayBuffer(4)),
+          0,
+          0,
+          Math.min(10 * 2 ** attempt, 250),
+        );
+      }
+    }
   } finally {
     if (fd !== undefined) closeSync(fd);
     try {

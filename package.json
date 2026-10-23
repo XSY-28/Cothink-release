@@ -1,6 +1,6 @@
 {
   "name": "cothink-v2",
-  "version": "0.7.1-diagnostics.1",
+  "version": "0.7.1-windows.1",
   "files": [
     "bin/cothink.js",
     "src/cli.js",

@@ -5,6 +5,23 @@ import { fileURLToPath } from "node:url";
 import { fixture } from "./helpers/pi-fixture.js";
 import { invoke as invokeBytes } from "./helpers/cli-fixture.js";
 import { saveConfig } from "../src/config.js";
+import { request } from "node:http";
+
+test("HTTP fixture preserves UTF-8 characters split between request chunks", async (t) => {
+  const f = await fixture(t);
+  const content = '中文"quoted"\nnext line';
+  const body = Buffer.from(JSON.stringify({ model: "main", messages: [{ role: "user", content }] }));
+  const split = body.indexOf(Buffer.from("中")) + 1;
+  await new Promise((resolve, reject) => {
+    const req = request(f.endpoint + "/chat/completions", {
+      method: "POST", headers: { "Content-Type": "application/json", "Content-Length": body.length },
+    }, res => { res.resume(); res.once("end", resolve); res.once("error", reject); });
+    req.once("error", reject);
+    req.write(body.subarray(0, split));
+    setTimeout(() => req.end(body.subarray(split)), 30);
+  });
+  assert.equal(f.calls[0].body.messages[0].content, content);
+});
 const cli = process.env.COTHINK_TEST_CLI ?? fileURLToPath(new URL("../bin/cothink.js", import.meta.url));
 export function invoke(f, args, input = "") {
   return new Promise((resolve, reject) => {
