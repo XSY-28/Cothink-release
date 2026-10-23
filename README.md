@@ -10,7 +10,7 @@ CoThink 基于 Pi 开发，可复用 Pi 社区的技能（Skills）、提示模�
 
 需要 Node.js ≥22.19、npm 和 Git。
 
-GitHub 诊断预览版为 [`0.7.1-diagnostics.1`](https://github.com/XSY-28/Cothink-release/releases/tag/v0.7.1-diagnostics.1)，增加截断原因与额度提示，保留已有认证和菜单功能；服务端输出额度与上下文限制仍可能导致 `partial`。下载 Release 的 `.tgz` 后可用 `npm install -g ./cothink-v2-0.7.1-diagnostics.1.tgz` 安装。
+GitHub 修复预览版为 [`0.7.1-windows.1`](https://github.com/XSY-28/Cothink-release/releases/tag/v0.7.1-windows.1)，修复 Windows 请求记录短暂占用导致的保存失败，保留长回复诊断、认证和菜单功能。Windows 用户可下载 Release 的 x64 / ARM64 ZIP；macOS 可下载 `.tgz` 后用 `npm install -g ./cothink-v2-0.7.1-windows.1.tgz` 安装。
 
 当前 npm `latest` 为 `0.7.0-auth.2`。Windows Terminal + PowerShell 的命令见下方[安装说明](#windows-通过-npm-安装)。
 
@@ -108,6 +108,8 @@ cothink show <任务ID> --all
 交互、参数、管道、print 和 JSON 共用完成判断。默认显示完整最终稿；`--all`、`/chat` 与 Ctrl+O 展开初稿、评审、成员、工具原文和状态。明确标题下的评审处理说明默认收起，原始记录和后续模型上下文保留全文；标题无法识别时保留全文。partial、failed、cancelled、unknown 不成功退出，也不展示为最终交付。
 
 长回答显示 `partial` 时，先查看错误中的阶段、模型和停止原因。服务返回 `length` 表示达到输出额度或上下文限制；未指定本地额度时，服务商的默认额度仍可能生效。`--json` 只导出已收到的完整记录，不改变模型额度。需要更长输出时，可按服务商支持范围显式设置，例如 `cothink ask --json --max-output-tokens 32768 "问题"`；该值须符合各参与模型的输出及上下文限制。已接收内容可通过 `cothink show <任务ID> --all` 查看，程序不会自动续写或重试。
+
+若错误为请求记录 `.tmp` 替换 `.json` 时的 `EPERM`，说明保存操作被 Windows 拒绝，并非服务端返回 `length`。本版对临时占用做有限等待后重试同一文件替换；持续权限问题仍会报错，旧记录保留。请保留错误信息排查占用者或目录权限，不必先修改输出 token 额度。
 
 | 命令或按键 | 行为 |
 | --- | --- |

@@ -15,6 +15,155 @@ import { atomic } from '../packages/agent-sync/src/storage.js';
 import { entries, assertProjection, scan } from '../packages/agent-sync/src/git.js';
 import { repository, git } from './helpers/git-fixture.js';
 import * as executor from '../packages/agent-sync/src/executor.js';
+import { tmpdir } from 'node:os';
+import { writePrivateJson } from '../src/storage.js';
+import { runTurn } from '../src/discussion.js';
+
+function recordFile(t) {
+  const dir = fs.mkdtempSync(path.join(tmpdir(), 'cothink-record-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const dest = path.join(dir, 'request.json');
+  fs.writeFileSync(dest, JSON.stringify({ text: 'old saved answer' }));
+  return { dir, dest };
+}
+
+function renameBoundary(t, handler, platform = 'win32') {
+  const descriptor = Object.getOwnPropertyDescriptor(process, 'platform');
+  const rename = fs.renameSync, waits = [];
+  Object.defineProperty(process, 'platform', { value: platform });
+  t.mock.method(fs, 'renameSync', (from, to) => handler(rename, from, to));
+  t.mock.method(Atomics, 'wait', (_array, _index, _value, delay) => {
+    waits.push(delay);
+    return 'timed-out';
+  });
+  syncBuiltinESMExports();
+  t.after(() => { Object.defineProperty(process, 'platform', descriptor); t.mock.restoreAll(); syncBuiltinESMExports(); });
+  return waits;
+}
+
+for (const code of ['EPERM', 'EACCES', 'EBUSY']) {
+  test(`Windows record replacement tolerates temporary ${code} without rewriting or deleting the old record`, t => {
+    const { dir, dest } = recordFile(t), sources = [], old = fs.readFileSync(dest, 'utf8');
+    let attempts = 0, guards = 0;
+    const waits = renameBoundary(t, (rename, from, to) => {
+      assert.equal(fs.readFileSync(dest, 'utf8'), old);
+      sources.push(from);
+      if (++attempts <= 2) throw Object.assign(Error('sharing violation'), { code });
+      return rename(from, to);
+    });
+    writePrivateJson(dest, { text: '完整新回答' }, () => guards++);
+    assert.equal(attempts, 3);
+    assert.equal(guards, 3, 'ownership is checked again after each wait');
+    assert.equal(new Set(sources).size, 1, 'the same flushed candidate is retried');
+    assert.deepEqual(waits, [10, 20]);
+    assert.deepEqual(JSON.parse(fs.readFileSync(dest)), { text: '完整新回答' });
+    assert.deepEqual(fs.readdirSync(dir), ['request.json']);
+  });
+}
+
+test('persistent Windows record denial stays bounded, preserves old bytes and reports the original error', t => {
+  const { dir, dest } = recordFile(t), old = fs.readFileSync(dest);
+  const denied = Object.assign(Error('persistent sharing violation'), { code: 'EPERM' });
+  let attempts = 0;
+  const waits = renameBoundary(t, () => { attempts++; throw denied; });
+  assert.throws(() => writePrivateJson(dest, { text: 'not published' }), e => e === denied);
+  assert.ok(attempts > 1 && attempts <= 9);
+  assert.ok(waits.reduce((sum, n) => sum + n, 0) <= 1100);
+  assert.deepEqual(fs.readFileSync(dest), old);
+  assert.deepEqual(fs.readdirSync(dir), ['request.json']);
+});
+
+for (const [platform, code] of [['darwin', 'EPERM'], ['win32', 'EIO'], ['win32', 'ENOSPC'], ['win32', 'ENOENT']]) {
+  test(`record replacement does not retry ${code} on ${platform}`, t => {
+    const { dest } = recordFile(t);
+    let attempts = 0;
+    const waits = renameBoundary(t, () => { attempts++; throw Object.assign(Error('write denied'), { code }); }, platform);
+    assert.throws(() => writePrivateJson(dest, { value: 2 }), { code });
+    assert.equal(attempts, 1);
+    assert.deepEqual(waits, []);
+    assert.equal(JSON.parse(fs.readFileSync(dest)).text, 'old saved answer');
+  });
+}
+
+test('lost ownership during a Windows rename wait prevents another publication attempt', t => {
+  const { dest } = recordFile(t);
+  let attempts = 0, guards = 0;
+  renameBoundary(t, () => { attempts++; throw Object.assign(Error('sharing'), { code: 'EPERM' }); });
+  assert.throws(() => writePrivateJson(dest, { value: 2 }, () => {
+    if (++guards === 2) throw Object.assign(Error('writer no longer owns session'), { code: 'STALE_WRITER' });
+  }), { code: 'STALE_WRITER' });
+  assert.equal(attempts, 1);
+  assert.equal(JSON.parse(fs.readFileSync(dest)).text, 'old saved answer');
+});
+
+test('a transient Windows review-record rename failure completes the same three model calls', async t => {
+  const text = '完整长回答\n'.repeat(2500);
+  const f = await fixture(t, () => ({ text }));
+  const descriptor = Object.getOwnPropertyDescriptor(process, 'platform');
+  const rename = fs.renameSync;
+  let injected = 0;
+  t.mock.method(Atomics, 'wait', () => 'timed-out');
+  t.mock.method(fs, 'renameSync', (from, to) => {
+    if (path.dirname(to) === path.join(f.home, 'requests')) {
+      const saved = JSON.parse(fs.readFileSync(from, 'utf8'));
+      if (saved.phase === 'review' && saved.sent && saved.events.length && injected < 2) {
+        injected++;
+        Object.defineProperty(process, 'platform', { value: 'win32' });
+        throw Object.assign(Error('Windows request snapshot sharing violation'), { code: 'EPERM' });
+      }
+    }
+    const result = rename(from, to);
+    Object.defineProperty(process, 'platform', descriptor);
+    return result;
+  });
+  syncBuiltinESMExports();
+  t.after(() => { Object.defineProperty(process, 'platform', descriptor); t.mock.restoreAll(); syncBuiltinESMExports(); });
+  const task = await runTurn({ home: f.home, cwd: f.cwd, input: 'question', config: { formatVersion: 2, ...f.models } });
+  assert.equal(injected, 2);
+  assert.equal(task.record.status, 'completed', task.record.error);
+  assert.equal(f.calls.length, 3, 'only the filesystem rename is repeated');
+  assert.deepEqual(task.requests().map(c => c.text), [text, text, text]);
+});
+
+for (const holdMs of [400, 3000]) {
+  test(`real Windows file sharing lock (${holdMs}ms) preserves atomic record publication`,
+    { skip: process.platform !== 'win32', timeout: 15000 }, async t => {
+      const dir = fs.mkdtempSync(path.join(tmpdir(), 'cothink-native-record-'));
+      const dest = path.join(dir, '中文 request.json');
+      fs.writeFileSync(dest, JSON.stringify({ text: 'old saved answer' }));
+      const script = "$s=[IO.File]::Open($env:COTHINK_TEST_LOCK_PATH,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read); [Console]::WriteLine('LOCKED'); Start-Sleep -Milliseconds ([int]$env:COTHINK_TEST_LOCK_MS); $s.Dispose()";
+      const child = childProcess.spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
+        env: { ...process.env, COTHINK_TEST_LOCK_PATH: dest, COTHINK_TEST_LOCK_MS: String(holdMs) },
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      const closed = new Promise(resolve => child.once('close', resolve));
+      t.after(async () => { child.kill(); await closed; fs.rmSync(dir, { recursive: true, force: true }); });
+      let stdout = '', stderr = '';
+      child.stderr.on('data', d => stderr += d);
+      await new Promise((resolve, reject) => {
+        child.once('error', reject);
+        child.stdout.on('data', d => { stdout += d; if (stdout.includes('LOCKED')) resolve(); });
+        child.once('close', () => { if (!stdout.includes('LOCKED')) reject(Error(stderr || 'locker exited before ready')); });
+      });
+      const rename = fs.renameSync, errors = [];
+      t.mock.method(fs, 'renameSync', (from, to) => {
+        try { return rename(from, to); }
+        catch (e) { errors.push(e.code); throw e; }
+      });
+      syncBuiltinESMExports();
+      t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
+      if (holdMs === 400) {
+        writePrivateJson(dest, { text: '完整新回答' });
+        assert.deepEqual(JSON.parse(fs.readFileSync(dest)), { text: '完整新回答' });
+      } else {
+        assert.throws(() => writePrivateJson(dest, { text: 'not published' }), e => ['EPERM', 'EACCES', 'EBUSY'].includes(e.code));
+        assert.equal(JSON.parse(fs.readFileSync(dest)).text, 'old saved answer');
+      }
+      assert.ok(errors.length > 0, 'the real OS must reject at least one rename while locked');
+      assert.ok(errors.every(code => ['EPERM', 'EACCES', 'EBUSY'].includes(code)));
+      assert.deepEqual(fs.readdirSync(dir), ['中文 request.json']);
+    });
+}
 
 test('Windows installed native helper loads without modifying clipboard contents', { skip: process.platform !== 'win32' }, () => {
   const native = getNativeClipboard();
