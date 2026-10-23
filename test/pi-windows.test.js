@@ -128,43 +128,21 @@ test('a transient Windows review-record rename failure completes the same three 
 for (const holdMs of [400, 3000]) {
   test(`real Windows file sharing lock (${holdMs}ms) preserves atomic record publication`,
     { skip: process.platform !== 'win32', timeout: 15000 }, async t => {
-      const waitedAt = performance.now();
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 25);
-      assert.ok(performance.now() - waitedAt >= 20, 'native lock checks require real waiting');
-      const dir = fs.mkdtempSync(path.join(tmpdir(), 'cothink-native-record-'));
-      const dest = path.join(dir, '中文 request.json');
-      fs.writeFileSync(dest, JSON.stringify({ text: 'old saved answer' }));
-      const script = "$s=[IO.File]::Open($env:COTHINK_TEST_LOCK_PATH,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read); [Console]::WriteLine('LOCKED'); Start-Sleep -Milliseconds ([int]$env:COTHINK_TEST_LOCK_MS); $s.Dispose()";
-      const child = childProcess.spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
-        env: { ...process.env, COTHINK_TEST_LOCK_PATH: dest, COTHINK_TEST_LOCK_MS: String(holdMs) },
-        stdio: ['ignore', 'pipe', 'pipe'],
+      t.diagnostic(JSON.stringify({ parentPlatform: process.platform,
+        parentRenameMocked: Boolean(fs.renameSync.mock), parentWaitMocked: Boolean(Atomics.wait.mock) }));
+      const helper = new URL('./helpers/windows-record-lock.mjs', import.meta.url);
+      const { fileURLToPath } = await import('node:url');
+      const stdout = await new Promise((resolve, reject) => {
+        childProcess.execFile(process.execPath, [fileURLToPath(helper), String(holdMs)],
+          { env: process.env, timeout: 14000 }, (error, stdout, stderr) =>
+            error ? reject(Error(stderr || stdout || error.message)) : resolve(stdout));
       });
-      const closed = new Promise(resolve => child.once('close', resolve));
-      t.after(async () => { child.kill(); await closed; fs.rmSync(dir, { recursive: true, force: true }); });
-      let stdout = '', stderr = '';
-      child.stderr.on('data', d => stderr += d);
-      await new Promise((resolve, reject) => {
-        child.once('error', reject);
-        child.stdout.on('data', d => { stdout += d; if (stdout.includes('LOCKED')) resolve(); });
-        child.once('close', () => { if (!stdout.includes('LOCKED')) reject(Error(stderr || 'locker exited before ready')); });
-      });
-      const rename = fs.renameSync, errors = [];
-      t.mock.method(fs, 'renameSync', (from, to) => {
-        try { return rename(from, to); }
-        catch (e) { errors.push(e.code); throw e; }
-      });
-      syncBuiltinESMExports();
-      t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
-      if (holdMs === 400) {
-        writePrivateJson(dest, { text: '完整新回答' });
-        assert.deepEqual(JSON.parse(fs.readFileSync(dest)), { text: '完整新回答' });
-      } else {
-        assert.throws(() => writePrivateJson(dest, { text: 'not published' }), e => ['EPERM', 'EACCES', 'EBUSY'].includes(e.code));
-        assert.equal(JSON.parse(fs.readFileSync(dest)).text, 'old saved answer');
-      }
-      assert.ok(errors.length > 0, 'the real OS must reject at least one rename while locked');
-      assert.ok(errors.every(code => ['EPERM', 'EACCES', 'EBUSY'].includes(code)));
-      assert.deepEqual(fs.readdirSync(dir), ['中文 request.json']);
+      const result = JSON.parse(stdout);
+      assert.equal(result.platform, 'win32');
+      assert.ok(['EPERM', 'EACCES', 'EBUSY'].includes(result.lockError));
+      assert.equal(result.updated, holdMs === 400);
+      assert.equal(result.oldBytesPreserved, holdMs === 3000);
+      t.diagnostic(stdout.trim());
     });
 }
 
