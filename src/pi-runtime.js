@@ -570,15 +570,29 @@ export async function createRuntime({
           if (task.ioError) throw task.ioError;
           if (task.signal.aborted) throw task.signal.reason;
           const call = task.requests().findLast((c) => c.stageId === stage.id);
-          if (!call || call.status !== "completed")
+          if (!call || call.status !== "completed") {
+            let detail = call?.response?.errorMessage ?? call?.error;
+            if (!detail && call?.response?.stopReason === "length") {
+              const phase = {
+                draft: "主答初稿",
+                review: "独立评审",
+                revision: "主答修订",
+              }[stage.phase] ?? stage.phase;
+              const cap = call.limits?.maxOutputTokens;
+              detail = `${phase}（${call.actualModel.provider}/${call.actualModel.modelId}）回复截断（partial）：服务返回 length，表示达到输出额度或上下文限制。` +
+                (cap == null
+                  ? "本次未指定输出额度，服务商默认额度仍可能生效。"
+                  : `本次明确设置的输出额度为 ${cap} tokens。`) +
+                "可用 --max-output-tokens N 显式调整服务商支持的额度；如已达到服务商限制，请缩短问题、材料或所需输出。已接收内容保留，未自动重试。";
+            }
             throw problem(
               call?.status ?? "FAILED",
-              call?.response?.errorMessage ??
-                call?.error ??
+              detail ??
                 (call?.status === "partial"
                   ? "回复截断（partial），保留已有内容。"
                   : "请求未完成，未自动重发。"),
             );
+          }
           stage.status = "completed";
           stage.entryId = manager.getLeafId();
           stage.sessionFile = manager.getSessionFile();

@@ -46,6 +46,31 @@ test("wire usage is counted once and truncation is partial", async (t) => {
   assert.equal(task.requests()[0].status, "partial");
   assert.equal(task.usage().known.input, 12);
 });
+for (const cap of [undefined, 77]) {
+  test(`length explains the provider limit and preserves partial content (cap=${cap})`, async (t) => {
+    const { f, task, rt } = await stage(
+      t,
+      () => ({ text: "已收到的长回答片段", finish: "length" }),
+      cap === undefined ? {} : { maxOutputTokens: cap },
+    );
+    await assert.rejects(rt.prompt("question"), (error) => {
+      assert.match(error.message, /主答初稿/);
+      assert.match(error.message, /fixture\/main/);
+      assert.match(error.message, /length/);
+      assert.match(error.message, /输出.*上下文/);
+      assert.match(error.message, /--max-output-tokens/);
+      if (cap === undefined) assert.match(error.message, /未指定.*服务商默认/);
+      else assert.match(error.message, /77 tokens/);
+      return true;
+    });
+    const call = task.requests()[0];
+    assert.equal(call.status, "partial");
+    assert.equal(call.text, "已收到的长回答片段");
+    assert.equal(call.response.stopReason, "length");
+    assert.equal(call.limits.maxOutputTokens, cap ?? null);
+    assert.equal(f.calls.length, 1, "truncation never retries");
+  });
+}
 test("HTTP errors are never automatically retried", async (t) => {
   const { f, task, rt } = await stage(t, () => ({ error: 429 }));
   await assert.rejects(rt.prompt("question"));
