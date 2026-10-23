@@ -112,6 +112,7 @@ jobs:
       - name: Verify the installed SDKs, native dependency and command behavior
         shell: bash
         run: |
+          export COTHINK_EXPECT_VERSION="$(node -p "require('./package.json').version")"
           node test/helpers/npm-installed.mjs "$COTHINK_INSTALLED_PACKAGE"
           node --test test/pi-session.test.js
           node test/helpers/pi-manual-terminal.mjs --smoke
