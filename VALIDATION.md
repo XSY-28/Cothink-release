@@ -1,3 +1,53 @@
+# 0.8.1-pi.1：Pi 1.4 本地更新（2026-10-24）
+
+CLI 与 GUI 的唯一 Pi 底座从 1.0.0 升级为固定 1.4.0，保留终端宿主、输入空白、密钥隐藏、无默认超时补丁。Anthropic SDK 随上游升级为 0.129.0，OpenAI SDK 保持 7.19.0。上游源码、模型目录、补丁和四个归档的哈希记录于 `vendor/pi-patches`；重复重建得到相同归档哈希，旧归档只保留于本地回退证据。
+
+Pi 1.4 的原生终端新增后台目录刷新，原 `allowModelNetwork: false` 只限制初始化。实际 CLI 联网审计先捕获该变化；CoThink 在统一 ModelRuntime 入口固定所有目录 refresh 为本地读取，新增真实 runtime 测试有 RED/GREEN。原生启动、reload、服务商刷新均不越过该政策；显式模型生成与认证沿用现有路径。
+
+macOS ARM64／Node 24.19.0、干净锁文件安装：主套件239项中236通过、0失败、3项Windows原生平台跳过；GUI73/73、agent-sync内核48/48、终端17＋40＋6通过。所有模型检查为localhost fixture；隔离执行使用实际固定Docker镜像。首次Docker未运行及后续退出的失败、目录刷新RED和打包停滞记录保留；没有改检查时限或跳过Docker来制造通过。
+
+候选离线安装到中文／空格prefix，实际CLI／GUI、62个静态资源和1,415个源码／SDK文件比较通过；安装后HTTP／PTY／Docker／历史／截断／未知响应19/19、更新提示六场景零联网通过。安装验证随上游从esbuild改为用实际jiti执行TypeScript enum，补丁SDK与错误版本拒绝仍检查。两次旧新切换及配置变化拒绝覆盖的回退演练通过。用户数据副本中的2个Team、2个会话、4轮任务可读，历史错误0；原147文件校验保持。上述为最初本机更新证据，具体包哈希和回退入口保存在本地交付记录。后续用户另行授权 GitHub 与 npm 发布；发布检查只调整安装文档，运行代码与上述本机版本逐字节核对，远端 CI 与 registry 结果以对应发行记录为准。
+
+边界：未调用付费模型，未验证本轮Windows实机／远端CI、物理IME或人工跨应用复制。生产npm audit保留上游undici 8.10.2的一项high及Pi归因的moderate，未改写上游精确依赖；不能称为零漏洞。Vite约707kB chunk警告及node-domexception弃用提示仍在。
+
+---
+
+# 0.8.0-unified.1：CLI／GUI 统一候选（2026-10-23）
+
+CLI 与 GUI 在私有主线维护唯一核心、一个根版本与同一安装包。合入固定 CLI 发行提交的 length 诊断及 Windows 原子保存修复，保留 GUI 的 secret 脱敏、最新 writer generation／released 与历史分支行为。原版本证据按版本保留，不替代本候选验收；本候选未发布 npm、未替换全局安装。
+
+本机 macOS ARM64、Node 24.19.0：干净锁文件安装后，完整主套件 238 项中 235 通过、0 失败、3 项原生 Windows 检查按平台跳过；agent-sync 内核 48/48、GUI 73/73、终端 17＋40＋6 通过，构建通过。CI 候选驱动 11/11，通过根版本和实际打包结果选择精确归档，不再以安装包自身版本作期望值。原生 Windows 与最低 Node 22.19.0 由私有 CI 另验，不能用本机跳过代替。
+
+实际安装候选在含中文和空格的干净 prefix 离线安装。CLI／GUI 实际入口、认证、62 个静态资源、1,378 个分发及 SDK 自身文件比较通过；全部 15,157 个安装普通文件与归档逐字节相同。故意使用错误期望版本时，校验明确拒绝。安装后的真实 HTTP／CLI PTY／Docker／历史／partial 组合 19/19 通过，覆盖三次问答与 ONE、写锁、实际 fork／tree、损坏记录隔离、取消、固定版本差异及二进制／删除／执行位补丁重建，原测试项目不自动写回。
+
+length HTTP 回归覆盖初稿／评审／修订、默认及显式额度、完整已收文本、实际阶段／模型、未知用量和费用、重开及重复确认不重发。共享错误指引同时指向模型设置与 CLI 参数，没有新增模型重试。实际安装候选浏览器完成三次讨论后 ONE 截断，部分原文和额度设置可见，刷新保持状态；总计四次 localhost 请求，console 无 warning/error。
+
+生产依赖、bundledDependencies 与四个锁定 SDK 归档保持字节。生产 audit 仍有冻结 SDK 的一项 high，Vite 仍有约 707 kB chunk 警告；没有为本轮合并升级 SDK 或隐藏警告。测试仅用 localhost 固定回复和临时项目，不证明真实模型质量、物理 IME、人工跨应用剪贴板或 Windows Docker。原目录及未提交资产保留；施工期间出现的并行评测工作另存快照，未混入本轮固定输入。
+
+来源、候选哈希、原始失败、独立审查和实际远端 CI 绑定见[统一验收记录](https://github.com/XSY-28/cothink-gui/blob/main/docs/SOURCE_UNIFICATION_ACCEPTANCE.md)。此处本地结果不提前宣称远端通过。
+
+# 0.8.0-gui.1：私有 GUI 候选（2026-10-23）
+
+本版增加本地浏览器入口，复用唯一 Pi 调用路径与 agent-sync。普通未关联项目对话使用中性目录；GUI 与 CLI 使用相同会话、Team、模式和写锁。项目成果保存在独立目录，不自动写回原仓库。版本仍是私有候选，未发布 npm、未替换全局安装。
+
+本机 macOS ARM64 此前完整源码回归：`npm test` 217 项中 216 通过、1 项 Windows 原生检查跳过；`npm run test:agent-sync-core` 48/48；`npm run test:gui` 60/60；`npm run test:pi-terminal` 的 17、40、6 项通过；`npm run build:gui` 成功。重型 Docker 检查顺序运行。以上模型机制均使用 localhost 固定回复，无付费模型调用。
+
+新增真实 HTTP 集成覆盖空配置／Key／命名 Team → 主答／第一评审／修订三次 → ONE 一次 → 释放 GUI writer → 实际 CLI PTY 同会话恢复 → 重开 GUI。CLI 持有 writer 时 GUI 只读、拒绝提交；上下文、Team、ONE、明确 null 项目和无 start_work 权限保持。macOS `/var` 与 `/private/var` 的中性目录差异曾导致继续会话查找失败，已保留 PTY 失败证据并通过规范真实路径修复。
+
+项目验证通过实际 server 与 Pi fixture 调用 agent-sync，包含 read/edit、独立成员、Docker 检查、接纳、任务固定 diff 和分页日志。下载补丁通过 Git `apply --index --binary` 重建与目标版本完全相同的树，包含二进制、删除、执行位；后续任务推进正式版本后旧任务 diff 不变，原仓库文件与 status 不变。空检查策略为 unverified，非空检查缺执行配置保持 partial 并显示已保存的具体错误；缺 Docker 在限制 PATH 的独立子进程验证，不停止用户 Docker，也不回退宿主 Shell。
+
+既有 GUI 检查覆盖重复 submissionId、刷新／SSE 断连重连、取消评审／成员、宿主关闭、损坏／旧历史、设置持久化失败、冻结模式、模型身份、secret 脱敏、Host／Origin／令牌／CSP／路径隔离。组件验证包括成员模型不能同时被列作未参与评审、中文准备阶段、IME composition 不误发、焦点返回与安全 Markdown。组件和 PTY 不能替代物理中文输入法、浏览器现场或剪贴板验收。
+
+安装包使用 `npm run pack:npm` 先重新构建 GUI，去掉消费者 overrides，保留锁定 SDK 的原字节。候选在含中文和空格的独立 prefix 离线安装，以实际安装后的 CLI、模块及 62 项静态资源验证；安装后的 HTTP／PTY／项目集成另跑，源码 fixture 仅提供 localhost 服务商与临时 Git 测试数据。最终包哈希、逐字节比对、安装路径和原始命令保存在本地阶段报告，不能用版本字符串单独认定同一产物。
+
+实际安装候选的浏览器验收已覆盖空配置设置、三次讨论、ONE 追问、真实 Docker 项目成果、从其他历史取消评审／成员、草稿保留、改名搜索、深浅主题和 1280×800／1024×768／800×600 视口。焦点与滚动恢复通过，页面无横向溢出，检查时 console 没有 warning/error。整分支审查发现的 fork／分支任务归属和损坏历史隔离问题另有真实 SDK／HTTP 回归：继承祖先、排除兄弟分支，GET-only 确认恢复保持会话内去重；损坏文件保留且只读，不阻断健康历史和设置。历史修复候选安装后 11/11 集成（6 项历史、5 项原 HTTP／CLI PTY／Docker）通过。最后追加真实同进程宿主重开后父／fork 历史可写的回归：只读占用判断复用现有最新 writer generation／released 语义；定向 9/9 和共享存储／Pi／包／Team／恢复 40/40 通过，交付包另行重建并复验。
+
+本机锁屏阻止 Finder 窗口观察，原生打开成果目录的窗口呈现、物理中文输入法及跨应用剪贴板没有验收；Windows 实体机／Docker、付费模型答案质量与普遍性能收益仍未验证。私有交付 CI 的范围和可检查入口见 [GUI 验收记录](https://github.com/XSY-28/cothink-gui/blob/codex/lightweight-gui/docs/gui/ACCEPTANCE.md)，旧发行 CI 不代替本候选结果。
+
+保留的依赖／构建问题：冻结 Pi SDK `1.0.0-cothink.9` → minimatch `10.2.6` → brace-expansion `5.0.9` 的 npm audit high 告警未通过重写 SDK 消除；本轮依赖字节保持不变，新浏览器 KaTeX 固定为 `0.19.0`。Vite 保留大于 500 kB 的 chunk 告警（约 707 kB，gzip 约 216 kB），构建成功不等于零警告。浏览器代码／本地字体完整声明见 `gui/THIRD_PARTY_NOTICES.txt`。
+
+以下保留此前版本的历史发行证据。
+
 # 0.7.1-windows.1：Windows 请求记录原子替换（2026-10-23）
 
 一例 Windows 长回答失败记录显示：初稿 `completed/stop`，评审 `failed/error`，错误为 `requests` 目录中 `.tmp` 替换 `.json` 的 `rename EPERM`。这定位到了本地保存环节，不属于服务端 `length` 截断；外部占用者或持久权限的具体原因尚未确认。此前长回复诊断版本只改善错误信息，没有修复这条替换路径。
