@@ -2,17 +2,49 @@
 
 CoThink 是一个多模型协作工具，旨在让不同模型组成团队，通过讨论、相互检查和分工协作，获得更好的回答与任务成果。
 
-CoThink 基于 Pi 开发，可复用 Pi 社区的技能（Skills）、提示模板和主题。其他插件需完成兼容适配后使用，具体范围见下方的[包管理说明](#安装和查看-pi-资源包)。
+CoThink `0.8.1-pi.1` 基于固定 Pi 1.4.0 开发，可复用 Pi 社区的技能（Skills）、提示模板和主题。其他插件需完成兼容适配后使用，具体范围见下方的[包管理说明](#安装和查看-pi-资源包)。
 
 项目仍在早期预览阶段，支持 macOS 与 Windows（x64 / ARM64），可通过 npm 安装；Windows 也提供 ZIP 下载包。项目仍有一些 bug 和不完善之处。欢迎通过 [Issues](https://github.com/XSY-28/Cothink-release/issues) 反馈问题、分享使用体验或提出改进建议。
 
+## 本地浏览器界面
+
+本版本可在浏览器中完成连续问答、ONE／CoThink 切换、具名 Team 与认证设置、历史查看，以及关联 Git 项目的代码工作。中央显示完整交付，右侧保留实际初稿、评审、修订或成员记录。浏览器只是本机核心的界面，模型请求仍使用你配置的服务商。
+
+CLI／GUI 共用一份源码，开发主线保存在私有仓库。普通用户通过 npm 安装后运行 `cothink gui`，无需源码仓库权限。已有仓库权限的维护者也可从源码启动：
+
+```sh
+git clone https://github.com/XSY-28/cothink-gui.git
+cd cothink-gui
+npm ci --ignore-scripts
+npm run build:gui
+npm run gui -- --no-open
+```
+
+打开命令输出的本机启动链接。链接中的 fragment 是本次宿主的临时凭据，请勿分享；页面读取后会清除地址中的凭据。默认仅监听 `127.0.0.1` 的随机端口。省略 `--no-open` 可自动打开浏览器，`--port 4317` 可指定端口。
+
+从源码生成的安装包也可安装到独立目录，不替换原有全局命令：
+
+```sh
+npm run pack:npm -- dist
+npm install --prefix ./gui-preview --ignore-scripts ./dist/cothink-v2-0.8.1-pi.1.tgz
+node ./gui-preview/node_modules/cothink-v2/bin/cothink.js gui --no-open
+```
+
+`pack:npm` 每次先重新构建 GUI，包内包含静态页面、公式字体、界面源文件与第三方声明。源码构建需要开发依赖，安装后的 GUI 不需要 Vite 或网络 CDN。npm 与 GitHub 发行页使用固定安装包分发，普通用户无需本机构建。
+
+首次可直接在设置中保存 API key、自定义服务商与命名 Team；保存不产生试探模型请求。已有 OAuth 可复用，新的 OAuth 登录请在 CLI 使用 `/login`，GUI 不提供完整 OAuth 授权流程。GUI 和 CLI 共用 `COTHINK_HOME`，同一会话不能同时写入。CLI 用 `-r` 选择 GUI 的历史会话；未关联项目的对话持续保持问答权限。
+
+普通对话不隐式授权启动目录。关联项目后可通过现有 Pi 与 agent-sync 读取、修改、检查和接纳；原目录不会自动写回。非空检查和 Shell 必须配置固定镜像摘要的 Docker 环境，不回退宿主 Shell。设置中的 work 为共享配置，对后续任务生效；空检查策略显示“未验证”。界面可查看任务固定起止版本的差异、检查日志，下载包含二进制／删除／执行位的补丁并打开独立成果目录。
+
+关闭页面不会取消任务；刷新仅重新观察已有任务。停止按钮取消整条任务，保留已保存内容。宿主退出会执行取消；崩溃或未知结果不会自动续跑、重发。历史 Team、参与者和费用来自已有记录，缺失内容保持未知。
+
+本地模型机制检查使用 localhost fixture 和实际 Docker，不能据此判断真实模型答案质量或物理中文输入法、人工剪贴板体验；跨平台 CI 与实机证据分别记录。具体证据及限制见 [VALIDATION.md](VALIDATION.md)。
+
 ## 安装与启动
 
-需要 Node.js ≥22.19、npm 和 Git。
+需要 Node.js ≥22.19、npm 和 Git；项目代码搜索还需要 ripgrep（`rg`）。
 
-GitHub 修复预览版为 [`0.7.1-windows.1`](https://github.com/XSY-28/Cothink-release/releases/tag/v0.7.1-windows.1)，修复 Windows 请求记录短暂占用导致的保存失败，保留长回复诊断、认证和菜单功能。Windows 用户可下载 Release 的 x64 / ARM64 ZIP；macOS 可下载 `.tgz` 后用 `npm install -g ./cothink-v2-0.7.1-windows.1.tgz` 安装。
-
-当前 npm `latest` 为 `0.7.1-windows.1`，包含上述 Windows 保存修复。Windows Terminal + PowerShell 的命令见下方[安装说明](#windows-通过-npm-安装)。
+`0.8.1-pi.1` 同时包含 CLI 与本地浏览器 GUI。安装后运行 `cothink` 进入终端，运行 `cothink gui` 打开浏览器界面。Windows Terminal + PowerShell 的命令见下方[安装说明](#windows-通过-npm-安装)。
 
 安装最新版：
 
@@ -37,18 +69,13 @@ export PATH="$HOME/.local/bin:$PATH"
 
 将上面的 `export` 加入 `~/.zshrc`，新终端也会使用该路径。更新前建议保留 `~/.cothink` 的备份；已经打开的旧进程需要退出重开。
 
-### 从源码运行
+### 维护与公开发行入口
 
-当前版本 `0.7.0-auth.2` 包括添加模型时的内联认证（明确复用哪个服务商的认证，缺少 API key 时当场隐藏输入）、终端启动标识，以及 Team/模型长列表的滚动与缩放修复。GitHub 上的 `0.6.0-windows.1` ZIP 继续保留。
+此前版本 `0.7.0-auth.2` 包括添加模型时的内联认证（明确复用哪个服务商的认证，缺少 API key 时当场隐藏输入）、终端启动标识，以及 Team/模型长列表的滚动与缩放修复。GitHub 上的 `0.6.0-windows.1` ZIP 继续保留。
 
-GitHub 仓库和发行下载公开可读。
+唯一开发主线位于私有仓库 [XSY-28/cothink-gui](https://github.com/XSY-28/cothink-gui)，CLI 与 GUI 共用同一核心和根包版本。公开仓库 [XSY-28/Cothink-release](https://github.com/XSY-28/Cothink-release) 只承接按固定版本生成的发行内容，不另行手工维护核心源码。原 CLI 工作目录保留为历史和未提交成果，不作为继续开发入口。
 
-```sh
-git clone https://github.com/XSY-28/Cothink-release.git
-cd Cothink-release
-npm ci --ignore-scripts
-node bin/cothink.js
-```
+`0.8.1-pi.1` 保留长回复诊断和 Windows 请求记录原子保存修复，并更新到 Pi 1.4.0。公开仓库保留历史发行源码；安装当前版本请使用 npm 或 [GitHub Releases](https://github.com/XSY-28/Cothink-release/releases)，不要把历史源码快照当作当前开发主线。历史验收按版本保存在 VALIDATION.md。
 
 首次设置选择一个主模型、至少一个有序副模型，并为 team 命名。通过 `/team` 复用、创建、调整和删除组合，已有服务商认证继续复用。API Key 隐藏输入，由 Pi 保存到 CoThink 数据根的 `pi/auth.json`；角色配置只保存模型引用。内置服务商不需要手填地址和协议。配置过程不发送生成请求；OAuth 登录可能需要浏览器操作。
 
@@ -69,7 +96,7 @@ npm 下载同一个跨平台包，按当前系统准备本地依赖。全局命�
 
 ## Windows 下载与启动
 
-到 [v0.6.0-windows.1 发行页面](https://github.com/XSY-28/Cothink-release/releases/tag/v0.6.0-windows.1) 下载与你的系统匹配的 `windows-x64.zip` 或 `windows-arm64.zip`（完整文件名包含版本），并用同页 SHA256SUMS 核对。不要选 GitHub 自动生成的 Source code 压缩包，它不包含离线依赖和启动脚本。
+到 [v0.7.1-windows.1 发行页面](https://github.com/XSY-28/Cothink-release/releases/tag/v0.7.1-windows.1) 下载与你的系统匹配的 `windows-x64.zip` 或 `windows-arm64.zip`（完整文件名包含版本），并用同页 SHA256SUMS 核对。不要选 GitHub 自动生成的 Source code 压缩包，它不包含离线依赖和启动脚本。
 
 先安装 Node.js ≥22.19 和 Git for Windows。将 ZIP 完整解压，在 Windows Terminal 的 PowerShell 中进入该文件夹：
 
@@ -107,7 +134,7 @@ cothink show <任务ID> --all
 
 交互、参数、管道、print 和 JSON 共用完成判断。默认显示完整最终稿；`--all`、`/chat` 与 Ctrl+O 展开初稿、评审、成员、工具原文和状态。明确标题下的评审处理说明默认收起，原始记录和后续模型上下文保留全文；标题无法识别时保留全文。partial、failed、cancelled、unknown 不成功退出，也不展示为最终交付。
 
-长回答显示 `partial` 时，先查看错误中的阶段、模型和停止原因。服务返回 `length` 表示达到输出额度或上下文限制；未指定本地额度时，服务商的默认额度仍可能生效。`--json` 只导出已收到的完整记录，不改变模型额度。需要更长输出时，可按服务商支持范围显式设置，例如 `cothink ask --json --max-output-tokens 32768 "问题"`；该值须符合各参与模型的输出及上下文限制。已接收内容可通过 `cothink show <任务ID> --all` 查看，程序不会自动续写或重试。
+长回答显示 `partial` 时，先查看错误中的阶段、模型和停止原因。服务返回 `length` 表示达到输出额度或上下文限制；未指定本地额度时，服务商的默认额度仍可能生效。`--json` 只导出已收到的完整记录，不改变模型额度。需要更长输出时，请检查模型设置中的输出额度；CLI 可按服务商支持范围显式设置，例如 `cothink ask --json --max-output-tokens 32768 "问题"`；该值须符合各参与模型的输出及上下文限制。已接收内容可通过 `cothink show <任务ID> --all` 查看，程序不会自动续写或重试。
 
 若错误为请求记录 `.tmp` 替换 `.json` 时的 `EPERM`，说明保存操作被 Windows 拒绝，并非服务端返回 `length`。本版对临时占用做有限等待后重试同一文件替换；持续权限问题仍会报错，旧记录保留。请保留错误信息排查占用者或目录权限，不必先修改输出 token 额度。
 
