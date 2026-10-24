@@ -2,7 +2,7 @@
 
 CoThink 是一个多模型协作工具，旨在让不同模型组成团队，通过讨论、相互检查和分工协作，获得更好的回答与任务成果。
 
-CoThink `0.8.1-pi.1` 基于固定 Pi 1.4.0 开发，可复用 Pi 社区的技能（Skills）、提示模板和主题。其他插件需完成兼容适配后使用，具体范围见下方的[包管理说明](#安装和查看-pi-资源包)。
+CoThink `0.8.2-kimi.1` 基于固定 Pi 1.4.0 开发，可复用 Pi 社区的技能（Skills）、提示模板和主题。其他插件需完成兼容适配后使用，具体范围见下方的[包管理说明](#安装和查看-pi-资源包)。
 
 项目仍在早期预览阶段，支持 macOS 与 Windows（x64 / ARM64），可通过 npm 安装；Windows 也提供 ZIP 下载包。项目仍有一些 bug 和不完善之处。欢迎通过 [Issues](https://github.com/XSY-28/Cothink-release/issues) 反馈问题、分享使用体验或提出改进建议。
 
@@ -26,7 +26,7 @@ npm run gui -- --no-open
 
 ```sh
 npm run pack:npm -- dist
-npm install --prefix ./gui-preview --ignore-scripts ./dist/cothink-v2-0.8.1-pi.1.tgz
+npm install --prefix ./gui-preview --ignore-scripts ./dist/cothink-v2-0.8.2-kimi.1.tgz
 node ./gui-preview/node_modules/cothink-v2/bin/cothink.js gui --no-open
 ```
 
@@ -44,7 +44,7 @@ node ./gui-preview/node_modules/cothink-v2/bin/cothink.js gui --no-open
 
 需要 Node.js ≥22.19、npm 和 Git；项目代码搜索还需要 ripgrep（`rg`）。
 
-`0.8.1-pi.1` 同时包含 CLI 与本地浏览器 GUI。安装后运行 `cothink` 进入终端，运行 `cothink gui` 打开浏览器界面。Windows Terminal + PowerShell 的命令见下方[安装说明](#windows-通过-npm-安装)。
+`0.8.2-kimi.1` 同时包含 CLI 与本地浏览器 GUI。安装后运行 `cothink` 进入终端，运行 `cothink gui` 打开浏览器界面。Windows Terminal + PowerShell 的命令见下方[安装说明](#windows-通过-npm-安装)。
 
 安装最新版：
 
@@ -80,6 +80,16 @@ export PATH="$HOME/.local/bin:$PATH"
 首次设置选择一个主模型、至少一个有序副模型，并为 team 命名。通过 `/team` 复用、创建、调整和删除组合，已有服务商认证继续复用。API Key 隐藏输入，由 Pi 保存到 CoThink 数据根的 `pi/auth.json`；角色配置只保存模型引用。内置服务商不需要手填地址和协议。配置过程不发送生成请求；OAuth 登录可能需要浏览器操作。
 
 旧版只配置主模型的配置仍可在一次性入口通过 `/one` 使用；建立具名 team 时需要至少一个副模型。普通讨论缺少评审时会在首次请求前拒绝。
+
+## 使用 Kimi K3.1 Pro
+
+在终端 `/models` 或 GUI 的模型设置中，选择 Moonshot AI CN（国内）或 Moonshot AI（国际），再选择 `Kimi K3.1 Pro`（ID `kimi-k3.1-pro`）。已有官方 Moonshot API 地址的导入配置也会显示该模型，并复用同一服务商的认证；选择新模型后按原规则另存为新 Team，旧组合不改写。
+
+模型支持 `low`、`high`、`max` 三档，分别对应界面的低、中、高。它始终思考；CoThink 会保留并回传完整 `reasoning_content`，包括多轮工具调用。没有显式设置时仍不发送本地输出 cap；模型服务本身的默认输出限制继续存在。输入上下文与最大输出能力按官方声明登记为 1,048,576 tokens，不表示可以同时占满输入和输出。
+
+本轮接入官方开放平台的标准 Pro，API 根地址为 `https://api.moonshot.cn/v1` 或 `https://api.moonshot.ai/v1`。代理地址、手工定义的同名模型与不同协议配置保留自己的声明，不自动改写。官方 API 账号需满足充值解锁条件，网页会员或赠送代金券不代表此模型的 API 权限。参见 [官方接口与限制](https://platform.kimi.com/docs/guide/kimi-k3-1-pro-quickstart)。
+
+新模型的目录价格尚未可靠固定时，任务费用显示未知，不能按免费或实际账单理解；token 用量与已收到内容照常保存。测试范围及真实调用证据见 VALIDATION.md。
 
 ## Windows 通过 npm 安装
 
@@ -279,7 +289,7 @@ cothink init --import-legacy
 - 默认不设本地模型超时或可省略的输出额度；`--timeout MS`、`--max-output-tokens N` 可显式设置，运行前展示实际政策。协议必填额度须配置，按模型配置的显式额度也会传到实际请求。
 - 自动重试、压缩、预热关闭。未知请求不重发；纠错须有具体反馈。接纳结果未知时查询既有 requestId，不用新 ID 重做。
 - 请求意图和工具意图先保存；保存失败则停止副作用。用量缺失保持未知，目录费用估算与账单区分，未知费用为 null。
-- 源码与安装包的 localhost fixture、PTY、真实模型和用户现场检查属于不同证据层；具体版本及限制见 [VALIDATION.md](VALIDATION.md)。尚无 CI、异机或跨平台实机结论。
+- 源码与安装包的 localhost fixture、PTY、真实模型和用户现场检查属于不同证据层；具体版本及限制见 [VALIDATION.md](VALIDATION.md)。各版本 CI、安装与物理平台证据分别记录，不能相互替代。
 
 源码验证与固定依赖重建：
 
