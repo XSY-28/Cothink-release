@@ -2,7 +2,7 @@
 
 CoThink 是一个多模型协作工具，旨在让不同模型组成团队，通过讨论、相互检查和分工协作，获得更好的回答与任务成果。
 
-CoThink `0.8.2-kimi.1` 基于固定 Pi 1.4.0 开发，可复用 Pi 社区的技能（Skills）、提示模板和主题。其他插件需完成兼容适配后使用，具体范围见下方的[包管理说明](#安装和查看-pi-资源包)。
+CoThink `0.8.3-delegation.1` 基于固定 Pi 1.4.0 开发，可复用 Pi 社区的技能（Skills）、提示模板和主题。其他插件需完成兼容适配后使用，具体范围见下方的[包管理说明](#安装和查看-pi-资源包)。
 
 项目仍在早期预览阶段，支持 macOS 与 Windows（x64 / ARM64），可通过 npm 安装；Windows 也提供 ZIP 下载包。项目仍有一些 bug 和不完善之处。欢迎通过 [Issues](https://github.com/XSY-28/Cothink-release/issues) 反馈问题、分享使用体验或提出改进建议。
 
@@ -26,7 +26,7 @@ npm run gui -- --no-open
 
 ```sh
 npm run pack:npm -- dist
-npm install --prefix ./gui-preview --ignore-scripts ./dist/cothink-v2-0.8.2-kimi.1.tgz
+npm install --prefix ./gui-preview --ignore-scripts ./dist/cothink-v2-0.8.3-delegation.1.tgz
 node ./gui-preview/node_modules/cothink-v2/bin/cothink.js gui --no-open
 ```
 
@@ -44,7 +44,7 @@ node ./gui-preview/node_modules/cothink-v2/bin/cothink.js gui --no-open
 
 需要 Node.js ≥22.19、npm 和 Git；项目代码搜索还需要 ripgrep（`rg`）。
 
-`0.8.2-kimi.1` 同时包含 CLI 与本地浏览器 GUI。安装后运行 `cothink` 进入终端，运行 `cothink gui` 打开浏览器界面。Windows Terminal + PowerShell 的命令见下方[安装说明](#windows-通过-npm-安装)。
+`0.8.3-delegation.1` 同时包含 CLI 与本地浏览器 GUI。安装后运行 `cothink` 进入终端，运行 `cothink gui` 打开浏览器界面。Windows Terminal + PowerShell 的命令见下方[安装说明](#windows-通过-npm-安装)。
 
 安装最新版：
 
@@ -80,6 +80,14 @@ export PATH="$HOME/.local/bin:$PATH"
 首次设置选择一个主模型、至少一个有序副模型，并为 team 命名。通过 `/team` 复用、创建、调整和删除组合，已有服务商认证继续复用。API Key 隐藏输入，由 Pi 保存到 CoThink 数据根的 `pi/auth.json`；角色配置只保存模型引用。内置服务商不需要手填地址和协议。配置过程不发送生成请求；OAuth 登录可能需要浏览器操作。
 
 旧版只配置主模型的配置仍可在一次性入口通过 `/one` 使用；建立具名 team 时需要至少一个副模型。普通讨论缺少评审时会在首次请求前拒绝。
+
+## 项目工作如何分工
+
+主模型会根据任务需要、当前可用模型和分工建议，选择亲自处理或委派给不同的副模型。内置建议覆盖 Opus 5.5、GPT-6 Astra、GPT-6.1 Sol、DeepSeek V4.1 Flash 1017 和 Kimi K3.1 Pro；未覆盖的任务由主模型依据已有信息判断。建议可以按任务调整，不是模型能力排行榜，也不会自动添加未配置的模型。
+
+工作运行时禁止委派给主模型本身及已知同模型别名；同一模型尚有未处理或结果未知的成员工作时，不能另建分身或通过改派绕过。可收集成果、给出具体反馈，在安全收尾后继续顺序工作。`/one` 始终只由主模型工作。
+
+成员实际执行、主模型收集整合、检查与接纳都沿用同一 Pi 和 agent-sync 路径。配置了副模型不代表本次已经调用它；请以实际成员记录与成果为准。当前验证证明运行机制，不证明这些分工建议已经带来稳定的 coding 提升。
 
 ## 使用 Kimi K3.1 Pro
 
