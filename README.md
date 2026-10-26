@@ -2,7 +2,7 @@
 
 CoThink 是一个多模型协作工具，旨在让不同模型组成团队，通过讨论、相互检查和分工协作，获得更好的回答与任务成果。
 
-CoThink `0.8.3-delegation.1` 基于固定 Pi 1.4.0 开发，可复用 Pi 社区的技能（Skills）、提示模板和主题。其他插件需完成兼容适配后使用，具体范围见下方的[包管理说明](#安装和查看-pi-资源包)。
+CoThink `0.8.4-updates.1` 基于固定 Pi 1.4.0 开发，可复用 Pi 社区的技能（Skills）、提示模板和主题。其他插件需完成兼容适配后使用，具体范围见下方的[包管理说明](#安装和查看-pi-资源包)。
 
 项目仍在早期预览阶段，支持 macOS 与 Windows（x64 / ARM64），可通过 npm 安装；Windows 也提供 ZIP 下载包。项目仍有一些 bug 和不完善之处。欢迎通过 [Issues](https://github.com/XSY-28/Cothink-release/issues) 反馈问题、分享使用体验或提出改进建议。
 
@@ -26,7 +26,7 @@ npm run gui -- --no-open
 
 ```sh
 npm run pack:npm -- dist
-npm install --prefix ./gui-preview --ignore-scripts ./dist/cothink-v2-0.8.3-delegation.1.tgz
+npm install --prefix ./gui-preview --ignore-scripts ./dist/cothink-v2-0.8.4-updates.1.tgz
 node ./gui-preview/node_modules/cothink-v2/bin/cothink.js gui --no-open
 ```
 
@@ -42,11 +42,21 @@ node ./gui-preview/node_modules/cothink-v2/bin/cothink.js gui --no-open
 
 ## 安装与启动
 
+GitHub 当前预览发行是 [0.8.4-updates.1](https://github.com/XSY-28/Cothink-release/releases/tag/v0.8.4-updates.1)。本次只更新 GitHub，尚未将本版发布到 npm；请下载该页的 `.tgz` 并安装：
+
+```sh
+npm install -g ./cothink-v2-0.8.4-updates.1.tgz
+cothink --version
+```
+
+Windows PowerShell 使用 `npm.cmd install -g .\cothink-v2-0.8.4-updates.1.tgz` 和 `cothink.cmd`。校验见同页 `SHA256SUMS`，固定来源见 `SOURCE.json`。GitHub 自动生成的 Source code 不是本版可安装包。原配置、Team、认证和历史继续保留；退出旧进程后重新启动。
+
+
 需要 Node.js ≥22.19、npm 和 Git；项目代码搜索还需要 ripgrep（`rg`）。
 
-`0.8.3-delegation.1` 同时包含 CLI 与本地浏览器 GUI。安装后运行 `cothink` 进入终端，运行 `cothink gui` 打开浏览器界面。Windows Terminal + PowerShell 的命令见下方[安装说明](#windows-通过-npm-安装)。
+`0.8.4-updates.1` 同时包含 CLI 与本地浏览器 GUI。安装后运行 `cothink` 进入终端，运行 `cothink gui` 打开浏览器界面。Windows Terminal + PowerShell 的命令见下方[安装说明](#windows-通过-npm-安装)。
 
-安装最新版：
+安装 npm 渠道版本（本次 GitHub 预览版尚未同步到该渠道）：
 
 ```sh
 npm install -g cothink-v2
@@ -54,7 +64,7 @@ npm install -g cothink-v2
 
 安装后运行 `cothink`。首次启动会引导你选择主副模型、为 Team 命名并配置认证；已有认证会继续复用。也可以运行 `cothink init` 单独完成设置，或用 `cothink --version` 检查版本。
 
-更新到最新版使用同一条命令：
+更新 npm 渠道版本使用同一条命令（不会安装尚未发布到 npm 的 GitHub 预览版）：
 
 ```sh
 npm install -g cothink-v2@latest
@@ -312,3 +322,17 @@ Pi 来源、固定补丁和产物哈希在 `vendor/pi-patches/`，许可说明�
 ## 许可证
 
 CoThink 原创代码与仓库内 agent-sync 内核采用 [MIT](LICENSE)。第三方依赖保留各自许可证，固定 Pi 补丁、来源和许可说明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+
+
+### 新版本提醒
+
+交互 CLI 和 GUI 就绪后默认在后台检查 `https://registry.npmjs.org/cothink-v2/latest`，每个数据目录 24 小时内自动尝试一次（失败也计入间隔）。请求不携带模型密钥、npm token、对话或项目内容，检查不调用模型；非交互 ask、管道、history、show 和帮助不会自动查新。查新以 npm latest 为准，可能包含发布者明确推荐的预发布版本。
+
+- CLI：`/updates` 查看版本、最近检查时间、官方说明和更新指引，手动检查或切换自动检查。
+- 无模型配置时：`cothink check-update`；脚本使用 `cothink check-update --json`，成功检查返回 0，检查不可用返回 1。
+- GUI：顶部“有新版本”提示打开设置的“可用更新”；也可直接从设置检查。提示不抢焦点、不清草稿；“本地更新记录”仍只说明已安装版本。
+- 停用自动检查：在面板关闭开关，或设置 `COTHINK_NO_UPDATE_CHECK=1`。显式 `PI_OFFLINE=1` 禁止包括手动在内的全部查新。开关保存在 `COTHINK_HOME/update-state.json`，与 Team、认证和本地摘要已读状态分开。
+
+一次查新只发送一个 GET，不重试；总期限 5 秒（含响应体）、最大 256 KiB、拒绝重定向。网络失败时继续使用，手动界面显示失败与带时间的旧缓存。状态损坏或不可写时保留原件，本次进程停用自动检查；手动结果只在内存可用，保存失败不会显示“已保存”。已打开的界面在下一次任务提交或 GUI 获得焦点时再检查是否到期，不运行常驻定时服务；多个进程恰好同时首次启动可能各发一次请求。
+
+按原安装方式选择指引：npm 全局安装显示经过验证的精确版本命令（Windows 为 `npm.cmd`）；自定义 prefix 沿用原 prefix。Windows ZIP 从[官方 Releases](https://github.com/XSY-28/Cothink-release/releases)选适配架构，退出旧进程，在新目录安装启动，保留数据目录；源码或托管目录按原方式更新。所有命令仅供阅读/复制，CoThink 不执行下载、安装、目录替换或重启。npm 推荐版本可发现不代表所有平台资产均已核实可用。旧版用户需先手动安装一次含此功能的版本，以后才有提醒。
