@@ -2,7 +2,7 @@
 
 CoThink 是一个多模型协作工具，旨在让不同模型组成团队，通过讨论、相互检查和分工协作，获得更好的回答与任务成果。
 
-CoThink `0.8.4-updates.1` 基于固定 Pi 1.4.0 开发，可复用 Pi 社区的技能（Skills）、提示模板和主题。其他插件需完成兼容适配后使用，具体范围见下方的[包管理说明](#安装和查看-pi-资源包)。
+CoThink `0.8.5-prompts.1` 基于固定 Pi 1.4.0 开发，可复用 Pi 社区的技能（Skills）、提示模板和主题。其他插件需完成兼容适配后使用，具体范围见下方的[包管理说明](#安装和查看-pi-资源包)。
 
 项目仍在早期预览阶段，支持 macOS 与 Windows（x64 / ARM64），可通过 npm 安装；Windows 也提供 ZIP 下载包。项目仍有一些 bug 和不完善之处。欢迎通过 [Issues](https://github.com/XSY-28/Cothink-release/issues) 反馈问题、分享使用体验或提出改进建议。
 
@@ -26,7 +26,7 @@ npm run gui -- --no-open
 
 ```sh
 npm run pack:npm -- dist
-npm install --prefix ./gui-preview --ignore-scripts ./dist/cothink-v2-0.8.4-updates.1.tgz
+npm install --prefix ./gui-preview --ignore-scripts ./dist/cothink-v2-0.8.5-prompts.1.tgz
 node ./gui-preview/node_modules/cothink-v2/bin/cothink.js gui --no-open
 ```
 
@@ -42,21 +42,20 @@ node ./gui-preview/node_modules/cothink-v2/bin/cothink.js gui --no-open
 
 ## 安装与启动
 
-GitHub 当前预览发行是 [0.8.4-updates.1](https://github.com/XSY-28/Cothink-release/releases/tag/v0.8.4-updates.1)。本次只更新 GitHub，尚未将本版发布到 npm；请下载该页的 `.tgz` 并安装：
+当前版本为 [0.8.5-prompts.1](https://github.com/XSY-28/Cothink-release/releases/tag/v0.8.5-prompts.1)，包含主副模型提示词与实际授权交接更新。通过 npm 安装或更新：
 
 ```sh
-npm install -g ./cothink-v2-0.8.4-updates.1.tgz
+npm install -g cothink-v2@latest
 cothink --version
 ```
 
-Windows PowerShell 使用 `npm.cmd install -g .\cothink-v2-0.8.4-updates.1.tgz` 和 `cothink.cmd`。校验见同页 `SHA256SUMS`，固定来源见 `SOURCE.json`。GitHub 自动生成的 Source code 不是本版可安装包。原配置、Team、认证和历史继续保留；退出旧进程后重新启动。
-
+也可从该发行页下载 `cothink-v2-0.8.5-prompts.1.tgz` 后运行 `npm install -g ./cothink-v2-0.8.5-prompts.1.tgz`。Windows PowerShell 使用 `npm.cmd` 和 `cothink.cmd`。校验见同页 `SHA256SUMS`，固定来源见 `SOURCE.json`。GitHub 自动生成的 Source code 不是本版可安装包。原配置、Team、认证和历史继续保留；退出旧进程后重新启动。
 
 需要 Node.js ≥22.19、npm 和 Git；项目代码搜索还需要 ripgrep（`rg`）。
 
-`0.8.4-updates.1` 同时包含 CLI 与本地浏览器 GUI。安装后运行 `cothink` 进入终端，运行 `cothink gui` 打开浏览器界面。Windows Terminal + PowerShell 的命令见下方[安装说明](#windows-通过-npm-安装)。
+`0.8.5-prompts.1` 同时包含 CLI 与本地浏览器 GUI。安装后运行 `cothink` 进入终端，运行 `cothink gui` 打开浏览器界面。Windows Terminal + PowerShell 的命令见下方[安装说明](#windows-通过-npm-安装)。
 
-安装 npm 渠道版本（本次 GitHub 预览版尚未同步到该渠道）：
+安装 npm 渠道版本：
 
 ```sh
 npm install -g cothink-v2
@@ -64,7 +63,7 @@ npm install -g cothink-v2
 
 安装后运行 `cothink`。首次启动会引导你选择主副模型、为 Team 命名并配置认证；已有认证会继续复用。也可以运行 `cothink init` 单独完成设置，或用 `cothink --version` 检查版本。
 
-更新 npm 渠道版本使用同一条命令（不会安装尚未发布到 npm 的 GitHub 预览版）：
+更新 npm 渠道版本使用同一条命令：
 
 ```sh
 npm install -g cothink-v2@latest
@@ -93,7 +92,7 @@ export PATH="$HOME/.local/bin:$PATH"
 
 ## 项目工作如何分工
 
-主模型会根据任务需要、当前可用模型和分工建议，选择亲自处理或委派给不同的副模型。内置建议覆盖 Opus 5.5、GPT-6 Astra、GPT-6.1 Sol、DeepSeek V4.1 Flash 1017 和 Kimi K3.1 Pro；未覆盖的任务由主模型依据已有信息判断。建议可以按任务调整，不是模型能力排行榜，也不会自动添加未配置的模型。
+主模型在实现前比较自己与当前合法副模型，说明执行者选择及理由。前端默认 Opus 5.5 优先于 Kimi K3.1 Pro，两者都比 DeepSeek 更优先；其他领域参考 GPT-6 Astra、GPT-6.1 Sol、DeepSeek 与 Kimi 的具体任务偏好。默认顺序指向副模型时实际委派；选择自己或偏离默认需说明具体依据。这些是可修订的调度偏好，尚未验证为通用能力排名，也不会自动添加未配置的模型。副模型独立核实方案，按每次请求附带的当前实际权限、固定检查与执行环境完成工作，交接文件、接口、实际检查和未完成项。
 
 工作运行时禁止委派给主模型本身及已知同模型别名；同一模型尚有未处理或结果未知的成员工作时，不能另建分身或通过改派绕过。可收集成果、给出具体反馈，在安全收尾后继续顺序工作。`/one` 始终只由主模型工作。
 
