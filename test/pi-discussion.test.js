@@ -234,3 +234,36 @@ test("draft, independent review and revision receive one frozen skill version", 
   const { taskJson } = await import("../src/presentation.js");
   assert.match(JSON.stringify(taskJson(f.home, task.record)), /SKILL_BODY_V1/);
 });
+
+test('resource isolation preserves stage-owned main and reviewer prompts and excludes context files', async t=>{
+  const {readFileSync,writeFileSync}=await import('node:fs');
+  const {join}=await import('node:path');
+  const f=await fixture(t,()=>({text:'answer'}));
+  writeFileSync(join(f.cwd,'AGENTS.md'),'CONTEXT_MUST_NOT_ENTER');
+  const input='做一个自行车骑鹈鹕的动态html界面，svg，不允许联网';
+  const task=await api.runTurn({home:f.home,cwd:f.cwd,input,config:{formatVersion:2,...f.models},resourceOptions:{noContextFiles:true,noSkills:true,noPromptTemplates:true,noThemes:true},packageSnapshot:{packages:[],extensions:[],skills:[],prompts:[],themes:[],diagnostics:[]}});
+  assert.equal(task.record.status,'completed',task.record.error);assert.equal(f.calls.length,3);
+  const main=readFileSync(new URL('../prompts/main.md',import.meta.url),'utf8').trim();
+  const review=readFileSync(new URL('../prompts/review.md',import.meta.url),'utf8').trim();
+  const systems=f.calls.map(c=>c.body.messages.find(m=>m.role==='system').content);
+  assert.ok(systems[0].includes(main),'initial model must receive CoThink main prompt');
+  assert.ok(systems[1].includes(review),'reviewer must receive review prompt');
+  assert.ok(!systems[1].includes(main),'main stage prompt must not leak into review');
+  assert.ok(systems[2].includes(main),'revision retains main role');
+  assert.ok(!JSON.stringify(f.calls).includes('CONTEXT_MUST_NOT_ENTER'));
+  const initial=f.calls[0].body.messages.find(m=>m.role==='user').content;
+  assert.equal(typeof initial==='string'?initial:initial.map(x=>x.text??'').join(''),input);
+});
+
+test('unspecified reasoning defaults to high for main/reviewer/revision and freezes effective settings',async t=>{
+  const {readFileSync,writeFileSync}=await import('node:fs');const {join}=await import('node:path');
+  const f=await fixture(t);const path=join(f.home,'pi/models.json'),models=JSON.parse(readFileSync(path));
+  for(const m of models.providers.fixture.models){m.reasoning=true;m.compat={supportsReasoningEffort:true,thinkingFormat:'openai'};}
+  writeFileSync(path,JSON.stringify(models));
+  const config={formatVersion:2,...f.models};const before=structuredClone(config);
+  const task=await api.runTurn({home:f.home,cwd:f.cwd,input:'q',config});
+  assert.equal(task.record.status,'completed',task.record.error);
+  assert.deepEqual(f.calls.map(c=>c.body.reasoning_effort),['high','high','high']);
+  assert.equal(task.record.models.main.thinkingLevel,'high');assert.equal(task.record.models.secondary[0].thinkingLevel,'high');
+  assert.deepEqual(config,before,'caller config and historical snapshots remain unchanged');
+});

@@ -2,9 +2,18 @@
 
 CoThink 是一个多模型协作工具，旨在让不同模型组成团队，通过讨论、相互检查和分工协作，获得更好的回答与任务成果。
 
-CoThink `0.8.5-prompts.1` 基于固定 Pi 1.4.0 开发，可复用 Pi 社区的技能（Skills）、提示模板和主题。其他插件需完成兼容适配后使用，具体范围见下方的[包管理说明](#安装和查看-pi-资源包)。
+GitHub 预览版 CoThink `0.8.9-native.1` 基于固定 Pi 1.4.0 开发，可复用 Pi 社区的技能（Skills）、提示模板、主题及下述已支持的插件入口。本版通过 [GitHub Releases](https://github.com/XSY-28/Cothink-release/releases/tag/v0.8.9-native.1) 提供安装包，尚未发布到 npm；具体范围见下方的[包管理说明](#安装和查看-pi-资源包)。
 
 项目仍在早期预览阶段，支持 macOS 与 Windows（x64 / ARM64），可通过 npm 安装；Windows 也提供 ZIP 下载包。项目仍有一些 bug 和不完善之处。欢迎通过 [Issues](https://github.com/XSY-28/Cothink-release/issues) 反馈问题、分享使用体验或提出改进建议。
+
+## 本版新增（0.8.9-native.1）
+
+- 接入 Pi 插件的工具、命令、事件与技能，安装后可在已支持的 CLI 路径中实际使用。
+- 包管理支持 npm、Pi 支持的 Git 来源、本地文件／目录，以及个人／项目作用域；多个 Team 共享所选资源。
+- 支持插件动态注册和空闲时重载；加载错误、名称冲突及未适配接口明确报告。
+- 插件产生的文件在独立副本中处理，经审阅、版本校验和 agent-sync 检查后接纳，原目录不自动覆盖。
+
+普通纯问答仍为 ONE 一次、CoThink 三次。本轮主要验收 CLI；具体支持范围和未验证项见 [VALIDATION.md](VALIDATION.md)，不代表所有 Pi 插件均已兼容。
 
 ## 本地浏览器界面
 
@@ -26,11 +35,13 @@ npm run gui -- --no-open
 
 ```sh
 npm run pack:npm -- dist
-npm install --prefix ./gui-preview --ignore-scripts ./dist/cothink-v2-0.8.5-prompts.1.tgz
+npm install --prefix ./gui-preview --ignore-scripts ./dist/cothink-v2-0.8.9-native.1.tgz
 node ./gui-preview/node_modules/cothink-v2/bin/cothink.js gui --no-open
 ```
 
 `pack:npm` 每次先重新构建 GUI，包内包含静态页面、公式字体、界面源文件与第三方声明。源码构建需要开发依赖，安装后的 GUI 不需要 Vite 或网络 CDN。npm 与 GitHub 发行页使用固定安装包分发，普通用户无需本机构建。
+
+源码主线还包含题意保真修复：成员先独立阅读原题，再接收分工与建议；题意冲突会暂停并保留草稿。HTML/SVG 最终截图由同一主模型在独立上下文中审查，界面分别显示版本接纳、图像请求和符合／不符合／不确定判断。首次委派通常至少增加一次准备调用；普通问答仍为 ONE 一次、CoThink 三次。源码安装以提交与安装包摘要标识，不表示 npm 已发布新版本。
 
 首次可直接在设置中保存 API key、自定义服务商与命名 Team；保存不产生试探模型请求。已有 OAuth 可复用，新的 OAuth 登录请在 CLI 使用 `/login`，GUI 不提供完整 OAuth 授权流程。GUI 和 CLI 共用 `COTHINK_HOME`，同一会话不能同时写入。CLI 用 `-r` 选择 GUI 的历史会话；未关联项目的对话持续保持问答权限。
 
@@ -42,18 +53,19 @@ node ./gui-preview/node_modules/cothink-v2/bin/cothink.js gui --no-open
 
 ## 安装与启动
 
-当前版本为 [0.8.5-prompts.1](https://github.com/XSY-28/Cothink-release/releases/tag/v0.8.5-prompts.1)，包含主副模型提示词与实际授权交接更新。通过 npm 安装或更新：
+GitHub 预览版为 [`0.8.9-native.1`](https://github.com/XSY-28/Cothink-release/releases/tag/v0.8.9-native.1)，尚未发布到 npm。下载该发行页的 `.tgz` 和 `SHA256SUMS`，核对摘要后安装（不要下载 GitHub 自动生成的 Source code 压缩包来代替安装包）：
 
 ```sh
-npm install -g cothink-v2@latest
+curl -fL -o cothink-v2-0.8.9-native.1.tgz https://github.com/XSY-28/Cothink-release/releases/download/v0.8.9-native.1/cothink-v2-0.8.9-native.1.tgz
+npm install -g ./cothink-v2-0.8.9-native.1.tgz
 cothink --version
 ```
 
-也可从该发行页下载 `cothink-v2-0.8.5-prompts.1.tgz` 后运行 `npm install -g ./cothink-v2-0.8.5-prompts.1.tgz`。Windows PowerShell 使用 `npm.cmd` 和 `cothink.cmd`。校验见同页 `SHA256SUMS`，固定来源见 `SOURCE.json`。GitHub 自动生成的 Source code 不是本版可安装包。原配置、Team、认证和历史继续保留；退出旧进程后重新启动。
+Windows PowerShell 使用 `npm.cmd` 和 `cothink.cmd`；本轮未提供新的 Windows ZIP，旧 ZIP 保留在历史发行页。原配置、Team、认证和历史继续保留；退出旧进程后重新启动。下方 `npm ...@latest` 安装的是 npm 渠道版本，不等于本 GitHub 预览版。
 
 需要 Node.js ≥22.19、npm 和 Git；项目代码搜索还需要 ripgrep（`rg`）。
 
-`0.8.5-prompts.1` 同时包含 CLI 与本地浏览器 GUI。安装后运行 `cothink` 进入终端，运行 `cothink gui` 打开浏览器界面。Windows Terminal + PowerShell 的命令见下方[安装说明](#windows-通过-npm-安装)。
+该安装包同时包含 CLI 与本地浏览器 GUI。安装后运行 `cothink` 进入终端，运行 `cothink gui` 打开浏览器界面。Windows Terminal + PowerShell 的命令见下方[安装说明](#windows-通过-npm-安装)。
 
 安装 npm 渠道版本：
 
@@ -90,11 +102,17 @@ export PATH="$HOME/.local/bin:$PATH"
 
 旧版只配置主模型的配置仍可在一次性入口通过 `/one` 使用；建立具名 team 时需要至少一个副模型。普通讨论缺少评审时会在首次请求前拒绝。
 
+## 动态 HTML／SVG 盲选测试
+
+源码仓库附带 `scripts/visual-bench.mjs`：同题使用同一条简短提示词，三题九个任务独立并发，离线执行，最后在浏览器匿名选择动态作品。重复轮次、预算、隔离与使用命令见 [测试脚本说明](docs/VISUAL_BENCH.md)。该工具按需调用真实模型；准备和查看不产生模型请求。
+
 ## 项目工作如何分工
+
+主副模型须忠实保留原题的主体、动作、对象和关系方向；委派解释与原题冲突时以原题为准，验收先检查题意，再处理视觉和实现细节。未指定思考档位时，支持思考的模型默认使用 `high`，显式选择优先。
 
 主模型在实现前比较自己与当前合法副模型，说明执行者选择及理由。前端默认 Opus 5.5 优先于 Kimi K3.1 Pro，两者都比 DeepSeek 更优先；其他领域参考 GPT-6 Astra、GPT-6.1 Sol、DeepSeek 与 Kimi 的具体任务偏好。默认顺序指向副模型时实际委派；选择自己或偏离默认需说明具体依据。这些是可修订的调度偏好，尚未验证为通用能力排名，也不会自动添加未配置的模型。副模型独立核实方案，按每次请求附带的当前实际权限、固定检查与执行环境完成工作，交接文件、接口、实际检查和未完成项。
 
-工作运行时禁止委派给主模型本身及已知同模型别名；同一模型尚有未处理或结果未知的成员工作时，不能另建分身或通过改派绕过。可收集成果、给出具体反馈，在安全收尾后继续顺序工作。`/one` 始终只由主模型工作。
+工作运行时禁止委派给主模型本身及已知同模型别名；同一模型尚有未处理或结果未知的成员工作时，不能另建分身或通过改派绕过。可收集成果、给出具体反馈，在安全收尾后继续顺序工作。`/one` 由主模型担任唯一 Team 负责人，不调用正式评审或副模型。
 
 成员实际执行、主模型收集整合、检查与接纳都沿用同一 Pi 和 agent-sync 路径。配置了副模型不代表本次已经调用它；请以实际成员记录与成果为准。当前验证证明运行机制，不证明这些分工建议已经带来稳定的 coding 提升。
 
@@ -167,6 +185,7 @@ cothink show <任务ID> --all
 
 | 命令或按键 | 行为 |
 | --- | --- |
+| Option+M（Alt+M） | 在输入区切换 ONE / CoThink，保留草稿；运行中只影响下一条 |
 | `/one` | 当前对话持续切换为 ONE 单模型模式 |
 | `/cothink` | 当前对话切回 CoThink 讨论模式 |
 | `/one <任务>` | 仅本条使用主模型，下一条沿用当前对话模式 |
@@ -181,9 +200,11 @@ cothink show <任务ID> --all
 | Enter | 发送完整输入 |
 | Shift+Return、Ctrl+J | 换行；支持扩展编码及 macOS Terminal 的 Escape+Return 编码 |
 
+macOS Terminal 使用此快捷键时，需在“设置 → 描述文件 → 键盘”开启“将 Option 键用作 Meta 键”；GUI 直接识别 Option+M。未开启时终端可能输入 `µ`，程序不会把这个普通字符或粘贴内容当作切换命令。
+
 输入框下方持续显示 `ONE · 单模型` 或 `COTHINK · 讨论`；预算按实际任务更新，临时 `/one <任务>` 完成后回到当前对话模式。模式切换不改变上下文和 Team。恢复、clone、fork、tree 和 reload 按所选历史保留模式，新对话及未记录模式的旧对话默认 CoThink。空会话的选择在首次发送消息后随对话落盘。运行中切换只影响下一条，当前任务的模式与预算已固定。
 
-单模型纯答一次，讨论纯答三次；工作都可能多次调用，ONE 仅主模型独自工作、不评审或委派，CoThink 工作可按需委派。
+单模型纯答一次，讨论纯答三次；工作都可能多次调用，ONE 由主模型担任唯一 Team 负责人，不调用正式评审或副模型；CoThink 工作可按需委派正式成员。
 
 新对话 `/new` 继承当前 team；全新进程采用最近一次选择或提交任务时使用的已保存 team。恢复、分支和导入使用各自会话的阵容快照。同一个 team 不共享聊天历史。`/thinking` 调整会话参数，无需给阵容重新命名。
 
@@ -210,27 +231,30 @@ Team、模型和服务商菜单的长列表随选中项滚动。用 ↑/↓ 或�
 ```sh
 cothink install npm:包名
 cothink install npm:@scope/包名@1.2.3
+cothink install git:https://github.com/owner/repo@ref
+cothink install ./my-plugin
+cothink install npm:包名 --local
 cothink list --json
 cothink remove npm:包名
 ```
 
 从源码运行时，将上面的 `cothink` 替换为 `node bin/cothink.js`。
 
-包保存在当前 `COTHINK_HOME/pi/npm`，同一数据目录的所有 Team 共享。管理命令不需要模型配置、API Key 或已命名 Team，不发送生成请求。首版只支持 npm 来源；不支持本地路径、Git、URL 或 `--local`。
+个人 npm/Git 包保存在当前 `COTHINK_HOME/pi/npm` 或 `pi/git`，同一数据目录的所有 Team 共享。`--local` 使用原项目 `.pi/npm` 或 `.pi/git`；`remove --local` 只移除项目登记。URL 指锁定 Pi 支持的 Git URL，不包括任意归档下载；内嵌凭据请改用 Git credential helper。本地文件或目录沿用原生链接语义，卸载只取消登记，不删除原文件。项目包的明确安装授权保存在 CoThink 数据根，绑定原项目规范路径与登记摘要；复制或生成 `.pi` 不会自动获得授权。管理命令不需要模型配置、API Key 或已命名 Team，不发送生成请求。
 
-安装会联网下载文件，关闭根包和依赖的 npm 生命周期脚本，不执行扩展来检查兼容性。实际精确版本及 npm lockfile 会保留；再次安装同一精确版本会先核验现有文件，无版本或 tag 的显式安装可选择新版本，没有后台更新。安装/卸载前须退出使用同一数据目录的全部 CoThink 窗口，包括空闲会话；`list` 可在会话打开时执行且不联网、不补装。
+安装会联网下载文件，并按 npm 原生方式执行根包和依赖的生命周期脚本；安装本身不 import 扩展来检查兼容性。脚本属于用户主动选择运行的代码，受管候选回退不能撤销任意宿主副作用。实际精确版本及 npm lockfile 会保留；再次安装同一精确版本会先核验现有文件，无版本或 tag 的显式安装可选择新版本，没有后台更新。安装/卸载前须退出使用同一数据目录的全部 CoThink 窗口，包括空闲会话；`list` 可在会话打开时执行且不联网、不补装。
 
 可用的 skill 正文、Markdown 提示模板和 JSON 主题会在下次启动时载入。普通问答仍由一位评审完成三次调用，`/one` 一次；显式 `/skill:名称` 与模板使用现有入口。手工 `piResources` 保留，同名不同来源或覆盖 `/team`、`/models` 等本地命令的资源会在发布前报错。包资源不能引用包外路径或符号链接。
 
-未知 JavaScript 扩展会显示「未启用，需要适配 agent-sync」，同包独立数据资源仍可使用。subagent/agent-teams 包禁止安装和加载。文本可读不代表其脚本、外部服务或原生依赖可执行；本功能不保证所有 Pi 插件兼容。包不会改变 Team、认证、工具权限或工作隔离规则。
+显式安装的 JavaScript 扩展按 Pi 原生接口加载，不要求固定 UI 哈希白名单。安装与加载不代表工具已接入项目成果管理。普通问答不开放原生工作工具；本地插件命令在任务外执行，若尝试启动未绑定模型工作会明确拒绝。已适配原生工具复用 Pi 动态注册表，在独立副本中执行；有文件变化时须明确审阅后导入。插件代码受用户安装选择信任，不能声称受 agent-sync 全面沙箱保护。
 
 失败和取消会保留候选及私有日志路径；不会自动重发安装。若提交中断，程序停止加载包；退出会话后下一次明确的 `install`/`remove` 会先核验备份并恢复上一稳定状态。证据不完整或目录被另行修改时会保留现场并报恢复错误。历史查询仍使用已保存的请求和技能正文，删除包不删除历史。
 
 ## 执行项目工作
 
-在有 HEAD 提交的 Git 项目中启动并描述实际修改。主模型在首次请求中选择进入工作，无额外分类请求。`/one <任务>` 使用同一工具和版本流程独自工作。
+在有 HEAD 提交的 Git 项目中启动并描述实际修改。主模型在首次请求中选择进入工作，无额外分类请求。`/one <任务>` 沿用同一版本流程，由主模型担任唯一 Team 负责人。
 
-每位执行者使用 agent-sync 的独立源码投影。写范围冲突在执行前等待，读快照不占写锁；已知范围可以直接声明，未知时先观察。领导可亲自工作，collect先返回可处理成果；成员不能递归委派。原目录未提交内容不自动进入起点，原用户目录不覆盖。非Git或无HEAD目录明确拒绝。
+每位执行者使用 agent-sync 的独立源码投影。写范围冲突在执行前等待，读快照不占写锁；已知范围可以直接声明，未知时先观察。领导可亲自工作，collect先返回可处理成果；成员不创建正式 Team 委派。原目录未提交内容不自动进入起点，原用户目录不覆盖。非Git或无HEAD目录明确拒绝。
 
 文件工具读取权威tree，写入有旧内容前提并整批原子提交；候选固定后仍可修订。领导审阅已展示内容后可直接accept_change，宿主负责候选ID。反馈保留原草稿/会话；具体依据或范围变化通过refresh_change保留成果并反馈差异，不靠重造patch解决。
 
@@ -265,7 +289,7 @@ cothink migrate-work /absolute/project --rollback --json
 
 迁移保存原元数据、回执、修改和引用快照，停用旧写入口，再登记原正式ref。数据损坏、缺ref、旧请求未决或活跃writer都会停止。旧安装对迁移项目的写入被阻止，旧只读事实仍可查。已有新接纳后必须沿新历史修复，不能简单换回旧程序继续写。
 
-原生skills、模板和已审查纯UI资源保留。第三方JS须在加载前审核；当前允许固定哈希的orca-prefill纯UI文件，未适配的pi-web-access克隆/缓存、MCP服务器、plannotator和自有模型循环扩展拒绝加载。选中一个工具名不授予宿主写权限，候选中的.pi也不自动加载。兼容边界和源码/localhost/安装/PTY/真实模型证据见 VALIDATION.md。
+原生 skills、模板和显式选择的扩展保留。扩展来源哈希用于追溯，不作为逐包放行白名单。普通原生工具经工作适配器使用独立副本，本地命令零模型调用；选中资源不授予额外写权限，候选中的 .pi 也不自动加载。兼容边界和源码/localhost/安装/PTY/真实模型证据见 VALIDATION.md。
 
 ## 数据与旧配置
 
@@ -281,13 +305,12 @@ cothink init --import-legacy
 
 ## 选择 Pi 资源
 
-不自动继承 `~/.pi` 的全部设置。可在现有配置添加本地资源路径和明确工具名：
+不自动继承 `~/.pi` 的全部设置。可在现有配置添加明确的本地资源路径：
 
 ```json
 "piResources": {
   "skills": ["/absolute/path/to/skill"],
-  "extensions": ["/absolute/path/to/extension.ts"],
-  "tools": ["fetch_content"]
+  "extensions": ["/absolute/path/to/extension.ts"]
 }
 ```
 
@@ -297,9 +320,15 @@ cothink init --import-legacy
 
 `/skill:name`（包括 `/one /skill:name`）优先使用 Pi 原生显式展开，本条不再叠加自动预载列表，禁用自动调用的技能仍可显式使用。`/chat`、Ctrl+O、`show ID --all` 可查看已预载的名称、来源和哈希；这只表示已提供材料，不代表模型已使用。`show ID --json` 的原请求保留正文，旧任务不受技能文件之后的修改影响。恢复和查看本身不生成。
 
-另有 `prompts`、`themes` 路径数组。主会话加载选定资源，工作领导只启用列出的扩展工具；成员使用独立资源集。原生技能的加载、reload 和命令展开已有检查。扩展须通过当前宿主的加载前审查；当前未适配的 pi-web-access、MCP adapter、plannotator 及自有模型循环扩展均拒绝加载。历史版本的加载/注册结果不能作为当前兼容承诺。
+另有 `prompts`、`themes` 路径数组。主会话加载选定资源；普通工作动态发现已安装工具，无需手工枚举工具名。旧 `piResources.tools` 不会绕过工作授权，建议移除该字段。准备、冲突确认和普通纯答不开放原生工具；宿主 read/write/start_work 等名称不得被扩展覆盖。注册替换遵循锁定 Pi 的调用快照：在 tool_call 中替换同名定义，后续调用使用新定义，已进入的调用仍使用其原定义。
 
-不安装或加载 subagent / agent-teams 插件；委派直接使用项目内 Pi SDK 会话。
+原生工具及工作生命周期的 `ctx.cwd` 是独立副本；文件变化保留为 nativePluginResultId，由创建者明确审阅、导入或拒绝，沿用公共 edit、审阅与接纳。宿主写入后，干净副本从当前正式私有版本刷新；有未处理差异或旧输入时明确阻断。普通异步工具的 Promise 返回仅证明该次受观察调用结束，不证明任意脱离的后台 JavaScript 或进程已停止；这类路径不在通用兼容承诺内。
+
+CLI 本地插件命令使用 Pi 原入口；GUI 输入框中的已注册命令或“插件命令”按钮走相同零生成分派。“重载插件”或终端 `/reload` 在空闲时重新加载本地入口与相对 JavaScript 模块；失败阻止新生成并保留历史。Pi/Jiti 的窄兼容补丁保留模块来源、顶层 await 与 SDK 共享身份，见 THIRD_PARTY_NOTICES.md。
+
+GUI 映射通知、状态、select/input/confirm（取消与插件显式提示超时）；会话／任务关闭会结束待答提示。文字小组件可显示；原生被动装饰仅显示未渲染警告，不运行组件工厂。主动 custom/editor、终端输入及自定义编辑器等接口明确报 EXTENSION_UI_UNSUPPORTED，使用交互终端入口。非交互 ask 维持 Pi 的 hasUI=false，不宣称显示了对话框。历史加载/注册结果不构成任意插件兼容承诺。
+
+模型文件工具限于各自副本与选定技能资源。工作中的脚本执行沿用已配置的固定断网 Docker 环境，不回退宿主 Shell。技能主文件及明确引用的资源复制到任务材料，不递归复制其任意上级目录；缺失资源明确报告。实际工具调用、插件报告用量和未知费用分别保存。第三方任意 JavaScript 副作用不在本地验证保证范围内。
 
 ## 调用与验证规则
 
@@ -335,3 +364,45 @@ CoThink 原创代码与仓库内 agent-sync 内核采用 [MIT](LICENSE)。第三
 一次查新只发送一个 GET，不重试；总期限 5 秒（含响应体）、最大 256 KiB、拒绝重定向。网络失败时继续使用，手动界面显示失败与带时间的旧缓存。状态损坏或不可写时保留原件，本次进程停用自动检查；手动结果只在内存可用，保存失败不会显示“已保存”。已打开的界面在下一次任务提交或 GUI 获得焦点时再检查是否到期，不运行常驻定时服务；多个进程恰好同时首次启动可能各发一次请求。
 
 按原安装方式选择指引：npm 全局安装显示经过验证的精确版本命令（Windows 为 `npm.cmd`）；自定义 prefix 沿用原 prefix。Windows ZIP 从[官方 Releases](https://github.com/XSY-28/Cothink-release/releases)选适配架构，退出旧进程，在新目录安装启动，保留数据目录；源码或托管目录按原方式更新。所有命令仅供阅读/复制，CoThink 不执行下载、安装、目录替换或重启。npm 推荐版本可发现不代表所有平台资产均已核实可用。旧版用户需先手动安装一次含此功能的版本，以后才有提醒。
+
+## HTML/SVG 制作与视觉检查（本地开发，尚未发布）
+
+已有 Git 项目中可用 `cothink make-html --one "制作任务"`；省略 `--one` 使用 CoThink。持续终端用 `/make-html <任务>`，继承当前 ONE/CoThink；GUI 使用发送旁的“制作HTML/SVG”。这是单条制作要求，不是第三种对话模式。输入中的引用、代码块不作为制作动作；CLI 管道保留多行原文。没有关联项目时先选择项目，草稿保留，不自动初始化 Git。
+
+提交前需要：支持图片的主模型、显式配置的适用技能、Docker 和已核验的预览镜像。技能通过 `piResources.skills` 指定 SKILL.md 主文件或已有受管包，任务冻结名称、正文和 SHA-256；不会扫描个人目录补齐。CoThink 的实际制作成员也必须支持图片。示意配置需合并进现有配置，不替换 Team/认证：
+
+```json
+{
+  "piResources": {"skills": ["/绝对路径/frontend-design/SKILL.md"]},
+  "work": {
+    "checks": [],
+    "execution": {
+      "engine": "docker",
+      "image": "从 docker/visual-preview-manifest.json 读取实际 image 字段",
+      "network": "none",
+      "limits": {"memoryBytes": 2147483648, "cpus": 2, "pids": 256},
+      "artifactPaths": []
+    }
+  }
+}
+```
+
+问答仍为 ONE 一次、CoThink 三次；制作直接进入工作，调用次数不设上限，不额外调用分类模型。输出额度按已有模型配置，不新增默认模型超时。`preview_html` 在断网容器内服务 HTML/SVG 及本地资源，可指定视口、最多三帧和六步 click/fill/key；没有任意 evaluate 接口。预览操作的 30 秒技术上限用于清理失控页面，不是模型请求超时。实际采样时间是墙钟时间，不是精确动画仿真。
+
+截图作为 PNG 进入同一 Pi 请求路径。最终接纳后，宿主为确定的集成版本再截图并送回主模型；有修订则检查新版本。图片未发送、截图失败、页面错误或未知请求不能冒称视觉检查完成；已接纳内容不会回滚。截图保存在数据根 `artifacts/<taskId>/<requestId>/`，GUI“检查”页按任务鉴权读取，CLI 输出本地证据链接。候选/历史截图与最终版本检查分开显示。
+
+这些都是 **CoThink 调用方能力**。agent-sync 内核、依赖、权限与恢复合同未修改：其无内容变化的 exec 仍可能产生新 privateVersion。调用方保存执行前后版本，并通过公共 inspect 的空差异证明内容未变；最终检查 change 随后结束，不把操作记账提交作为产品修改接纳。
+
+### 预览镜像的来源与重建
+
+当前实测平台为 Linux ARM64（macOS Docker Desktop），锁定 Node 基础镜像、Playwright 1.64.1、Chromium Headless Shell 156.0.8078.4 / revision 1248。镜像 digest、脚本 SHA-256 和浏览器资产 SHA-256 见 `docker/visual-preview-manifest.json`；实际 Debian 包版本清单见 `docker/visual-preview-packages.lock`。镜像不在模型任务运行中下载，也不包含在 npm 包里。Windows Docker / Linux x64 尚未实测，不承诺已有对应镜像。
+
+从锁定依赖的源码准备以下构建上下文：`playwright-core/` 来自 `node_modules/playwright-core/`，`visual-preview.mjs` 来自 `scripts/visual-preview.mjs`，`chromium_headless_shell-1248/` 包含解压后的 `chrome-headless-shell-linux-arm64/`。浏览器资产为 [官方 Linux ARM64 Headless Shell](https://cdn.playwright.dev/builds/cft/156.0.8078.4/linux-arm64/chrome-headless-shell-linux-arm64.zip)，SHA-256 必须是 `81ab9d4d3c301dc5fdfb6c541b9e6632b16fc819a6a854460f40a76fe2b2c476`。不要使用宿主 macOS 浏览器目录。
+
+使用 `docker build -f docker/visual-preview.Dockerfile -t cothink-visual-preview:local <上述上下文目录>` 构建。Dockerfile 在构建阶段安装 Debian 签名包与字体；清单记录本次实际版本，不承诺未来镜像源仍供应所有相同包。重建后必须核对包清单、实际 image digest、renderer SHA-256，更新锁定清单并运行 `npm run test:visual`；不能仅更换配置中的 digest 而宣称通过。已有核验镜像可用 Docker 的 save/load 原样转移，不需重新构建。
+
+新视觉 benchmark 的 `prepare` 冻结相同制作合同、技能源文件字节、镜像和预览能力。`run` 仍是会发送模型请求的独立动作，须另行授权；新制作轮次不自动重试。旧轮次只查看/报告，不回写旧成果、盲选顺序或选票。
+
+GitHub Linux ARM64 CI 使用 `node scripts/build-visual-preview.mjs` 在构建阶段取得锁定的 Linux 浏览器资产、构建固定镜像，并记录该次构建的实际 digest/包清单后再验证。此脚本不由模型运行时调用；其他平台可提供已核验的 Linux ARM64 上下文 `--context <目录>`。CI 结果绑定各次实际构建，不假定不同机器一定产生同一 digest。
+
+角色、工具使用、版本和失败处理的控制提示词使用英文；用户原题、委派材料、反馈和技能正文保留原文。自然语言回复遵循用户语言，界面识别的“## 对评审意见的处理说明”标题保持中文。成员只在实际授权内工作并交接，主模型及宿主负责授权调整、接纳和最终集成版本检查。语言改写经过机制回归，不代表英文已被真实模型对照证明更有效。

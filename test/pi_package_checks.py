@@ -31,7 +31,7 @@ def completed():
 settings=(home/'pi/settings.json').read_bytes()
 try:
  text('预算：纯答')
- listed=manage('list');assert listed.returncode==0,listed.stderr;assert json.loads(listed.stdout)['packages'][0]['status']=='partial'
+ listed=manage('list');assert listed.returncode==0,listed.stderr;assert json.loads(listed.stdout)['packages'][0]['status']=='enabled'
  blocked=manage('remove','npm:@cothink-fixtures/mixed');assert blocked.returncode==1;assert json.loads(blocked.stdout)['error']['code']=='PACKAGE_SESSION_BUSY'
  command('/team','选择 team');send('\x1b');time.sleep(.1);pump()
  command('/package-prompt supplied','fixture answer');wait(lambda:len(completed())==1)

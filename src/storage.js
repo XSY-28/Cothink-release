@@ -475,6 +475,18 @@ export function acquireSessionWriter(home, sessionId, onLost = () => {}) {
   return acquireDirectoryWriter(directory, onLost);
 }
 
+/** Non-mutating GUI inspection; acquisition remains the authoritative write boundary. */
+export function sessionWriterBusy(home, sessionId) {
+  checkId(sessionId);
+  const directory = join(home, "sessions", `${sessionId}.locks`);
+  try {
+    // Use the same latest-generation/token/release inspection as package safety.
+    return directoryWriterActive(directory);
+  } catch {
+    return true; // Uncertain ownership stays read-only; inspection never repairs it.
+  }
+}
+
 function acquireDirectoryWriter(directory, onLost = () => {}) {
   privateDirectory(directory);
   const claims = () =>
@@ -650,10 +662,10 @@ function directoryWriterActive(directory) {
   }
 }
 
-export function acquirePackageLock(home) {
-  privateDirectory(join(home, "pi"));
+export function acquirePackageLock(home, {agentDir = join(home,"pi")} = {}) {
+  privateDirectory(agentDir);
   try {
-    return acquireDirectoryWriter(join(home, "pi", "package-management.lock"));
+    return acquireDirectoryWriter(join(agentDir, "package-management.lock"));
   } catch (error) {
     if (error.code === "SESSION_BUSY")
       throw problem("PACKAGE_BUSY", "另一个包操作正在进行；稍后重试。");
@@ -661,21 +673,29 @@ export function acquirePackageLock(home) {
   }
 }
 
-export function assertPackageReadable(home) {
-  if (directoryWriterActive(join(home, "pi", "package-management.lock")))
+export function assertPackageReadable(home, {agentDir = join(home,"pi")} = {}) {
+  if (directoryWriterActive(join(agentDir, "package-management.lock")))
     throw problem(
       "PACKAGE_BUSY",
       "包操作正在进行；尚未读取受管资源，请稍后重新打开。",
     );
-  if (existsSync(join(home, "pi", "package-operation.json")))
+  if (existsSync(join(agentDir, "package-operation.json")))
     throw problem(
       "PACKAGE_RECOVERY_REQUIRED",
       "包提交尚未完成；停止加载。请退出会话后明确执行 install/remove 恢复。",
     );
 }
 
-export function assertNoActivePiSessions(home) {
-  const directory = join(home, "pi", "sessions");
+export function assertNoActivePiSessions(home, {agentDir = join(home,"pi")} = {}) {
+  // A dead owner PID is not proof that its detached runner or Docker writer stopped.
+  // Reuse the task's durable runner record; never reclaim uncertain writer protection.
+  const tasks=join(home,'tasks');
+  if(existsSync(tasks))for(const name of readdirSync(tasks).filter(n=>n.endsWith('.json'))) {
+    let record;try{record=JSON.parse(readFileSync(join(tasks,name),'utf8'));}catch{throw problem('SESSION_LOCK_UNKNOWN','Task ownership record is unreadable; package replacement blocked');}
+    if((record.tools??[]).some(t=>t.nativeBackground&&!t.stoppedAt))throw problem('PACKAGE_SESSION_BUSY','Native background writer remains active or unknown; reconcile the original task before replacing packages.');
+  }
+
+  const directory = join(agentDir, "sessions");
   if (!existsSync(directory)) return;
   for (const name of readdirSync(directory).filter((n) =>
     n.endsWith(".locks"),

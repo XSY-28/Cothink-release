@@ -1,12 +1,14 @@
 /** Run in a physical Terminal for manual IME/keys/clipboard checks. Only localhost SSE, no real credentials. */
 import { createServer } from "node:http";
 import { mkdtempSync, mkdirSync, writeFileSync, existsSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve, dirname } from "node:path";
 import { tmpdir, homedir } from "node:os";
 import { spawn } from "node:child_process";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { randomUUID } from "node:crypto";
-import { createTeamConfig } from "../../src/teams.js";
+const cli = process.env.COTHINK_TEST_CLI ?? fileURLToPath(new URL("../../bin/cothink.js", import.meta.url));
+const packageRoot = resolve(process.env.COTHINK_TEST_PACKAGE_ROOT ?? join(dirname(cli), ".."));
+const { createTeamConfig } = await import(pathToFileURL(join(packageRoot, "src/teams.js")));
 if (process.argv.includes("--keys")) {
   if (!process.stdin.isTTY) throw Error("请在交互终端运行 --keys");
   const labels = ["Return", "Shift+Return", "Ctrl+J"];
@@ -111,7 +113,7 @@ process.stderr.write(
 const child = spawn(
   process.execPath,
   [
-    process.env.COTHINK_TEST_CLI ?? fileURLToPath(new URL("../../bin/cothink.js", import.meta.url)),
+    cli,
     ...(smoke ? ["ask", "--json", "local fixture"] : []),
   ],
   {

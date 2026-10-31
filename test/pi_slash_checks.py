@@ -42,15 +42,16 @@ with tempfile.TemporaryDirectory(prefix='cothink-slash-') as folder:
     master, slave = pty.openpty()
     original = termios.tcgetattr(slave)
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH', 30, 110, 0, 0))
-    env = dict(os.environ, COTHINK_HOME=folder, PI_OFFLINE='1', TERM='xterm-256color')
+    env = dict(os.environ, COTHINK_HOME=folder, PI_OFFLINE='0', COTHINK_NO_UPDATE_CHECK='0', TERM='xterm-256color', NODE_OPTIONS='--import='+str(ROOT / 'test/helpers/update-fetch.mjs'), COTHINK_TEST_UPDATE_LOG=str(home / 'update-requests'), COTHINK_TEST_UPDATE_DELAY_MS='1500')
     env.pop('COTHINK_NO_TTY', None)
     rejected = subprocess.run(['node', str(CLI), 'ask', '--json', '/one boundary probe'], cwd=home, env=dict(env, COTHINK_NO_TTY='1'), capture_output=True, text=True)
-    assert rejected.returncode != 0 and '扩展尚未适配agent-sync隔离合同，加载前拒绝' in (rejected.stdout + rejected.stderr), rejected.stdout + rejected.stderr
-    assert not (home / 'extension-loaded').exists(), 'unadapted extension imported before rejection'
-    assert calls == [], 'plugin rejection must happen before provider send'
-    checks.append({'boundary': 'unadapted extension rejected before import', 'calls': 0})
+    assert rejected.returncode == 0, rejected.stdout + rejected.stderr
+    assert (home / 'extension-loaded').exists(), 'explicitly selected native extension must load'
+    assert len(calls) == 1 and json.loads(rejected.stdout)['task']['status'] == 'completed'
+    assert not calls[0].get('tools') or all(tool['function']['name'] == 'start_work' for tool in calls[0]['tools']), 'pure answer must not acquire native work tools'
+    boundary_calls, boundary_tasks = len(calls), len(list((home / 'tasks').glob('*.json')))
+    checks.append({'boundary': 'native loading does not expand pure-answer calls or tools', 'calls': 1})
     config = json.loads((home / 'config.json').read_text())
-    config['piResources'].pop('extensions')
     (home / 'config.json').write_text(json.dumps(team_config(config)))
     child = subprocess.Popen(['node', str(CLI)], cwd=home, stdin=slave, stdout=slave, stderr=slave, env=env, start_new_session=True)
     transcript = bytearray()
@@ -73,18 +74,33 @@ with tempfile.TemporaryDirectory(prefix='cothink-slash-') as folder:
         wait(lambda: marker.encode() in transcript[start:] or calls or records())
         time.sleep(.05)
         pump()
-        assert not calls, f'{text!r} generated {len(calls)} requests'
-        assert not records(), f'{text!r} created a model task'
+        assert len(calls) == boundary_calls, f'{text!r} generated additional requests'
+        assert len(records()) == boundary_tasks, f'{text!r} created a model task'
         checks.append({'input': text, 'calls': 0, 'tasks': 0})
     try:
         wait(lambda: '预算：纯答'.encode() in transcript)
-        for name in ['settings', 'scoped-models', 'copy', 'session', 'changelog', 'hotkeys', 'fork', 'clone', 'tree', 'trust', 'logout', 'new', 'reload', 'debug', 'resume', 'quit', 'chat', 'team', 'models', 'model', 'help']:
+        os.write(master, 'DRAFT_UPDATE_PRESERVED'.encode())
+        wait(lambda: 'CoThink 有新版本'.encode() in transcript)
+        assert 'DRAFT_UPDATE_PRESERVED' in '\n'.join(visible_rows(transcript))
+        command('/updates unexpected', '/updates 不接受参数')
+        command('/updates', 'CoThink 更新')
+        os.write(master, b'\r')
+        wait(lambda: '原安装方式'.encode() in transcript)
+        os.write(master, b'\x1b')
+        time.sleep(.1); pump()
+        os.write(master, b'\x1b[B\x1b[B\r')
+        wait(lambda: json.loads((home / 'update-state.json').read_text())['automatic'] is False)
+        os.write(master,b'\x1b')
+        wait(lambda: '自动检查偏好已保存'.encode() in transcript)
+        checks.append({'scenario':'update-notice-draft-panel-preference','calls':0})
+        for name in ['settings', 'scoped-models', 'copy', 'session', 'changelog', 'hotkeys', 'fork', 'clone', 'tree', 'trust', 'logout', 'new', 'reload', 'debug', 'resume', 'quit', 'chat', 'updates', 'team', 'models', 'model', 'help']:
             command('/' + name + ' unexpected', '/' + ('models' if name == 'model' else name) + ' 不接受参数')
         for text in ['/setting', '/unknown arg', '/skill:missing arg', '/MODEL main', '/', '/share', '/bug', '/arminsayshi', '/dementedelves', '/compact arg']:
             command(text, '未发送' if text != '/compact arg' else '尚未')
-        command('/local-test hello', '未发送')
-        command('/local-test\tworld', '未发送')
-        command('/forward-local', '未发送')
+        command('/local-test hello', 'LOCAL_DONE:hello')
+        command('/local-test\tworld', 'LOCAL_DONE:world')
+        command('/forward-local', 'UNADAPTED_PLUGIN')
+        command('/reload', 'Reloaded')
         command('/name\tSLASH_AUDIT', 'Session name set: SLASH_AUDIT')
         def finished():
             return [json.loads(p.read_text()) for p in records() if json.loads(p.read_text())['status'] == 'completed']
@@ -126,6 +142,18 @@ with tempfile.TemporaryDirectory(prefix='cothink-slash-') as folder:
         while child.poll() is None and time.monotonic() < end: pump()
         assert child.poll() == 0
         assert termios.tcgetattr(slave) == original
+        before_requests=(home / 'update-requests').read_text()
+        transcript.clear()
+        child=subprocess.Popen(['node',str(CLI)],cwd=home,stdin=slave,stdout=slave,stderr=slave,env=env,start_new_session=True)
+        wait(lambda:'预算：纯答'.encode() in transcript)
+        # A cached reminder remains visible, but the network attempt log must not grow.
+        os.write(master,b'\x15/quit\r')
+        end=time.monotonic()+5
+        while child.poll() is None and time.monotonic()<end:pump()
+        assert child.poll()==0
+        assert (home / 'update-requests').read_text()==before_requests
+        assert termios.tcgetattr(slave)==original
+        checks.append({'scenario':'restart-automatic-off-no-request','requests':1})
     finally:
         release.set()
         if child.poll() is None: child.kill(); child.wait()

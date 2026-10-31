@@ -1,3 +1,5 @@
+import { payloadImageHashes } from "./visual-preview.js";
+import { describeError, responseHeaders, observeResponse } from "./transport-diagnostics.js";
 import { randomUUID } from "node:crypto";
 import { createAssistantMessageEventStream } from "@earendil-works/pi-ai/utils/event-stream";
 import { redact } from "./storage.js";
@@ -20,7 +22,7 @@ export function createRequestPolicy({ getBinding, getSecrets = () => [] }) {
       const output = createAssistantMessageEventStream();
       queueMicrotask(async () => {
         const binding = getBinding();
-        let call, task, stage;
+        let call, task, stage, removeAbortListener;
         const failure = (error) => ({
           role: "assistant",
           api: model.api,
@@ -80,6 +82,17 @@ export function createRequestPolicy({ getBinding, getSecrets = () => [] }) {
           const signal = options?.signal
             ? AbortSignal.any([options.signal, task.signal])
             : task.signal;
+          call.transport = { startedAt: new Date().toISOString(), bodyBytes: 0, bodyChunks: 0 };
+          const onAbort = () => {
+            call.transport.abort = {
+              at: new Date().toISOString(),
+              source: task.signal.aborted ? (task.ioError ? "storage_failure" : task.record.cancelRequestedAt ? "user_cancel" : "task_stop") : "runtime_signal",
+              reason: describeError(signal.reason, secrets),
+            };
+          };
+          signal.addEventListener("abort", onAbort, { once: true });
+          removeAbortListener = () => signal.removeEventListener("abort", onAbort);
+          if (signal.aborted) onAbort();
           let usageSeen = false;
           const opts = {
             ...options,
@@ -88,11 +101,20 @@ export function createRequestPolicy({ getBinding, getSecrets = () => [] }) {
               binding.maxOutputTokens ?? binding.modelRef?.maxOutputTokens ?? options?.maxTokens,
             fetch: async (url, init) => {
               if (signal.aborted) throw signal.reason;
-              const response = await (options?.fetch ?? globalThis.fetch)(url, init);
+              let response;
+              try {
+                response = await (options?.fetch ?? globalThis.fetch)(url, init);
+              } catch (error) {
+                call.transport.fetchError = describeError(error, secrets);
+                throw error;
+              }
               call.httpStatus = response.status;
-              if (!response.ok) call.rawErrorBody = clean(await response.clone().text());
+              call.transport.headersAt = new Date().toISOString();
+              call.transport.responseHeaders = responseHeaders(response.headers, secrets);
+              const observed = observeResponse(response, call.transport, secrets);
               task.writeRequest(call);
-              return response;
+              if (!observed.ok) call.rawErrorBody = clean(await observed.clone().text());
+              return observed;
             },
             timeoutMs: binding.timeout ?? 0,
             maxRetries: 0,
@@ -133,6 +155,12 @@ export function createRequestPolicy({ getBinding, getSecrets = () => [] }) {
                 baseUrl: actual.baseUrl,
               };
               call.payload = clean(body);
+              if(task.record.work?.visualEvidence) {
+                const hashes=payloadImageHashes(body), serialized=JSON.stringify(body);
+                for(const e of task.record.work.visualEvidence) {
+                  if(e.actor===stage.role && e.result==="captured" && !e.imageRequestId && e.images.length && e.images.every(i=>hashes.has(i.sha256)) && serialized.includes(e.toolCallId) && serialized.includes(e.sourceVersion)) e.imageRequestId=call.id;
+                }
+              }
               call.limits = {
                 maxOutputTokens:
                   binding.maxOutputTokens ?? binding.modelRef?.maxOutputTokens ?? null,
@@ -151,8 +179,7 @@ export function createRequestPolicy({ getBinding, getSecrets = () => [] }) {
               await options?.onResponse?.(response);
             },
             onProviderStreamEvent: async (data, actual) => {
-              const raw = clean(data);
-              call.events.push(raw);
+              task.appendRequestEvent(call, data);
               if (
                 data?.usage ||
                 data?.message?.usage ||
@@ -161,7 +188,6 @@ export function createRequestPolicy({ getBinding, getSecrets = () => [] }) {
                 data?.usageMetadata
               )
                 usageSeen = true;
-              task.writeRequest(call);
               await options?.onProviderStreamEvent?.(data, actual);
             },
           };
@@ -178,6 +204,7 @@ export function createRequestPolicy({ getBinding, getSecrets = () => [] }) {
             }
             if (event.type === "done" || event.type === "error") {
               call.response = clean(message);
+              if (event.type === "error") call.transport.sdkError = clean(message?.errorMessage);
               call.text = textOf(message);
               call.usage = usageSeen ? message.usage : null;
               call.usageSource = usageSeen ? "provider_stream" : null;
@@ -196,7 +223,7 @@ export function createRequestPolicy({ getBinding, getSecrets = () => [] }) {
                 : message.stopReason === "length"
                   ? "partial"
                   : message.stopReason === "error"
-                    ? call.httpStatus
+                    ? call.httpStatus >= 400
                       ? "failed"
                       : call.sent
                         ? "outcome_unknown"
@@ -225,6 +252,8 @@ export function createRequestPolicy({ getBinding, getSecrets = () => [] }) {
           if (binding) binding.error = error;
           if (call) {
             call.error = redact(error.message, call._secrets);
+            call.failure = describeError(error, call._secrets);
+            call.endedAt = new Date().toISOString();
             call.status = call.sent ? "outcome_unknown" : "failed";
             try {
               task.writeRequest(call);
@@ -234,6 +263,8 @@ export function createRequestPolicy({ getBinding, getSecrets = () => [] }) {
           }
           output.push({ type: "error", reason: "error", error: failure(error) });
           output.end();
+        } finally {
+          removeAbortListener?.();
         }
       });
       return output;

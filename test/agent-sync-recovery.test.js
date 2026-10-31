@@ -197,8 +197,8 @@ test(
             name: "delegate",
             args: {
               model: "fixture/" + m,
-              task: "inspect " + m,
-              materials: "read",
+              assignment: "inspect " + m,
+              implementationAdvice: "read",
               reason: "parallel",
               scope: [],
               readOnly: true,

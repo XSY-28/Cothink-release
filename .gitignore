@@ -20,3 +20,6 @@ __pycache__/
 .pi/
 auth.json
 *.log
+
+# Rebuilt static browser assets (included explicitly by release packaging)
+/gui/dist/

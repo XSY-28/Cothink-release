@@ -88,6 +88,7 @@ test("cancel ends the entire bound runtime; reopening does not replay unknown re
   await started;
   await task.cancel();
   await assert.rejects(p);
+  assert.equal(tasks.readRequests(f.home, task.record)[0].transport.abort.source, "user_cancel");
   const stored = tasks.readTask(f.home, task.record.id);
   assert.notEqual(stored.status, "completed");
   assert.equal(f.calls.length, 1);
@@ -248,4 +249,50 @@ test("explicit per-model output cap remains on an optional-cap protocol wire", a
   assert.equal(f.calls[0].body.max_completion_tokens ?? f.calls[0].body.max_tokens, 77);
   assert.equal(task.requests()[0].limits.maxOutputTokens, 77);
   assert.equal(f.calls.length, 1);
+});
+
+
+test("interrupted HTTP body preserves partial text, original socket cause and received progress without resend", async t => {
+  const {f,task,rt} = await stage(t, (_call,_n,_req,res) => {
+    res.writeHead(200, {"content-type":"text/event-stream", "x-request-id":"offline-stream-id", "set-cookie":"fixture-secret"});
+    res.write('data: '+JSON.stringify({choices:[{index:0,delta:{role:"assistant",content:"已收到的片段"}}]})+'\n\n');
+    setTimeout(()=>res.destroy(),60);
+    return null;
+  });
+  await assert.rejects(rt.prompt("question"));
+  const r=tasks.readRequests(f.home,task.record)[0];
+  assert.equal(f.calls.length,1);
+  assert.equal(r.status,"outcome_unknown");
+  assert.equal(r.text,"已收到的片段");
+  assert.equal(r.usage,null);
+  assert.equal(r.transport.bodyError.cause.code,"UND_ERR_SOCKET");
+  assert.ok(r.transport.bodyBytes>0 && r.transport.firstBodyAt && r.transport.lastBodyAt);
+  assert.equal(r.transport.bodyComplete,false);
+  assert.equal(r.transport.responseHeaders["x-request-id"],"offline-stream-id");
+  assert.equal(r.transport.responseHeaders["set-cookie"],undefined);
+  assert.doesNotMatch(JSON.stringify(r),/fixture-secret/);
+});
+test("HTTP 200 SSE error survives SDK normalization with no second request", async t => {
+  const {f,task,rt} = await stage(t, (_call,_n,_req,res) => {
+    res.writeHead(200,{"content-type":"text/event-stream"});
+    res.end('data: '+JSON.stringify({error:{type:"fixture_error",message:"failure fixture-secret"}})+'\n\n');
+    return null;
+  });
+  await assert.rejects(rt.prompt("question"));
+  const r=tasks.readRequests(f.home,task.record)[0];
+  assert.equal(f.calls.length,1);
+  assert.equal(r.transport.firstSseError.error.type,"fixture_error");
+  assert.doesNotMatch(JSON.stringify(r),/fixture-secret/);
+  assert.equal(r.usage,null);
+});
+
+test("connection loss before headers records the original fetch cause without resending", async t => {
+  const {f,task,rt} = await stage(t, (_call,_n,_req,res) => {res.destroy();return null;});
+  await assert.rejects(rt.prompt("question"));
+  const r=tasks.readRequests(f.home,task.record)[0];
+  assert.equal(f.calls.length,1);
+  assert.equal(r.status,"outcome_unknown");
+  assert.equal(r.transport.fetchError.cause.code,"UND_ERR_SOCKET");
+  assert.equal(r.transport.headersAt,undefined);
+  assert.equal(r.transport.bodyBytes,0);
 });

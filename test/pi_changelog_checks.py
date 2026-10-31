@@ -18,7 +18,8 @@ with tempfile.TemporaryDirectory(prefix='cothink-changelog-') as folder:
     preload = home / 'network-fixture.mjs'
     dispatcher = (CLI.parent.parent / 'node_modules/@earendil-works/pi-coding-agent/dist/core/http-dispatcher.js').as_uri()
     preload.write_text("await import(" + json.dumps(dispatcher) + "); import {appendFileSync} from 'node:fs'; globalThis.fetch=async(input)=>{const url=String(input?.url ?? input); appendFileSync(" + json.dumps(str(network)) + ",JSON.stringify(url)+'\\n'); return url.includes('/api/latest-version') ? Response.json({version:'999.0.0'}) : new Response('',{status:404});};")
-    env = dict(os.environ, COTHINK_HOME=folder, TERM='xterm-256color', NODE_OPTIONS='--import ' + str(preload))
+    # This fixture isolates the local changelog; startup update behavior has its own tests.
+    env = dict(os.environ, COTHINK_HOME=folder, COTHINK_NO_UPDATE_CHECK='1', TERM='xterm-256color', NODE_OPTIONS='--import ' + str(preload))
     for name in ['PI_OFFLINE', 'PI_SKIP_VERSION_CHECK', 'COTHINK_NO_TTY']:
         env.pop(name, None)
     state = home / 'ui-state.json'
@@ -56,8 +57,12 @@ with tempfile.TemporaryDirectory(prefix='cothink-changelog-') as folder:
                 wait(lambda: '/changelog 不接受参数'.encode() in transcript)
                 send('\x15/changelog\r')
                 wait(lambda: 'CoThink 完整更新记录'.encode() in transcript)
-                for _ in range(4): send('\x1b[6~')
-                wait(lambda: b'## 0.2.0-pi.1' in transcript)
+                # Read to the original entry without assuming a fixed number of releases/pages.
+                deadline = time.monotonic() + 8
+                while b'## 0.2.0-pi.1' not in transcript:
+                    send('\x1b[6~')
+                    assert time.monotonic() < deadline, transcript.decode(errors='replace')[-4000:]
+                    assert child.poll() is None, 'unexpected CLI exit'
                 assert b'pi.dev' not in transcript and b"What's New" not in transcript
                 returned = len(transcript)
                 send('\x1b')

@@ -90,7 +90,14 @@ try:
         try:
             s.assert_mode('COTHINK · 讨论', 3)
             screens['cothink'] = visible_rows(s.out)
-            s.command('/one', 'ONE · 单模型'); s.assert_mode('ONE · 单模型', 1)
+            s.send('shortcut draft')
+            s.send('\x1bm'); s.assert_mode('ONE · 单模型', 1)
+            assert any('shortcut draft' in row for row in visible_rows(s.out))
+            s.send('\x1bm'); s.assert_mode('COTHINK · 讨论', 3)
+            s.send('\x1b[109;3u'); s.assert_mode('ONE · 单模型', 1)
+            s.send('\x1b[200~µ\x1b[201~'); s.assert_mode('ONE · 单模型', 1)
+            assert any('µ' in row for row in visible_rows(s.out))
+            s.send('\x15')
             screens['one'] = visible_rows(s.out)
             s.send('/one\r'); time.sleep(.06); s.pump(); s.assert_mode('ONE · 单模型', 1)
             assert not calls and not s.records()
@@ -145,7 +152,7 @@ try:
         home = Path(folder); seed(home); s = Session(home); before = len(calls)
         try:
             hold.set(); s.send('frozen discussion\r'); s.wait(lambda: len(calls) == before + 1)
-            s.command('/one', 'ONE · 单模型'); s.assert_mode('ONE · 单模型', 3)
+            start = len(s.out); s.send('\x1bm'); s.wait_text('ONE · 单模型', start); s.assert_mode('ONE · 单模型', 3)
             assert len(calls) == before + 1
             hold.clear(); release.set(); s.wait(lambda: any(r['status'] == 'completed' for r in s.records()))
             s.assert_mode('ONE · 单模型', 1)
@@ -162,7 +169,7 @@ try:
         preload.write_text("import fs from 'node:fs'; import {syncBuiltinESMExports} from 'node:module'; const append=fs.appendFileSync; fs.appendFileSync=(p,v,...rest)=>{if(fs.existsSync(" + json.dumps(str(flag)) + ") && String(p).includes('/sessions/main/') && String(v).includes('cothink-mode')) throw Error('INJECTED_MODE_WRITE'); return append(p,v,...rest);};syncBuiltinESMExports();")
         s = Session(home, ('-c',), {'NODE_OPTIONS': '--import ' + str(preload)}); before = len(calls)
         try:
-            flag.touch(); s.command('/one', '模式保存失败'); s.assert_mode('COTHINK · 讨论', 3)
+            flag.touch(); start = len(s.out); s.send('\x1bm'); s.wait_text('模式保存失败', start); s.assert_mode('COTHINK · 讨论', 3)
             flag.unlink(); s.command('/one must not send', '请重新打开对话'); assert len(calls) == before
         finally: s.stop()
         s = Session(home, ('-c',))

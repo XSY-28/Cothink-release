@@ -31,7 +31,7 @@ export const nativeCommands = new Set([
   "quit",
 ]);
 export const nativeArgumentCommands = new Set(["thinking", "export", "import", "name", "login"]);
-export const hostLocalCommands = new Set(["chat", "team", "models", "model", "help", "cothink"]);
+export const hostLocalCommands = new Set(["updates", "chat", "team", "models", "model", "help", "cothink"]);
 export const singleLineCommand = (text) => {
   const command = text.trim();
   return !/[\r\n]/.test(command) ? /^\/([^\s]*)(?:\s+([\s\S]*))?$/.exec(command) : null;

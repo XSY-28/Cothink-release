@@ -1,3 +1,140 @@
+# 0.8.9-native.1 GitHub 预览版（2026-10-31）
+
+本轮沿用固定 Pi 1.4.0 与 pi-subagents@0.84.0 + native-host-admission-v2。原生 workflow、本地 detached／递归助手及显式 async:false Herdr 远端已接入同一受管副本、创建者审阅、公共 edit/check/accept 路径；以下旧章节是当时检查点，其阻断描述不覆盖本轮新增支持。
+
+远端仅以本机私有容器中的真实 SSH／Herdr0.9.5／Pi 和确定性 localhost provider 验证，不是外部机器或付费服务商验收。部署要求显式隔离 XDG_STATE_HOME、可信 SSH 配置及固定官方 unbundled Pi CLI／已补丁 provider 依赖；bundled CLI 不静默回退。旧 fixture 曾写入默认 host state，已按精确归属备份、核验并清理，不能宣称历来无宿主状态副作用。
+
+独立审查已关闭启动清理 P2：源与实际 bundle 均先保留受管 stop，再进行易失败的启动确认。启动／部分构造异常由真实工厂与 admission 函数加边界 doubles 检查；实际远端取消证据覆盖激活后流式请求，二者不混称。此前源回归、失败与来源哈希保留在 work/native-plugin-routes 各报告；本轮安装候选关键复验和精确产物身份见本地 delivery-report.md。
+
+未验证或不支持：远端 GUI／后台完整组合（async:true 拒绝）、外部机器／远端 Docker daemon、任意其他插件、未知后台任务重启接管、多子 attached-chain resume、付费模型质量／账单、Windows 实机与物理键盘。可信插件不是 OS 沙箱；未知停止／费用仍未知。本轮 GitHub 发行只更新说明并分发既有已验证运行代码，未发布到 npm；不修改 agent-sync 内核。此前本地候选的无全局切换／无发布记录属于历史检查点。
+
+# 以下为历史检查点（保留原始范围与失败）
+
+# 未发布：远端限定收尾 R3（2026-10-31）
+
+真实取消用例只发送一次远端请求：关闭 admission 后仍完成原 Pi child 的 shutdown/close 取证，按 PID/starttime/入口/合同绑定，结果为 cancelled。原失败暴露了提前关闭反向连接的问题，失败日志保留。清理资格与新操作权限已分开；并未重新开放已取消的准入。
+
+实际断开本次拥有的 bridge SSH tunnel 后，原生重连保持同一 run/nativeSession/terminal/cwd，证据 cursor 0→13；两次远端请求为 write 和正常续答，runtime ready 只有一次。另一实际用例在远端响应保持期间通过正常主工具将同文件 A 改为 C；旧 B 被 STALE_PRIVATE 拒绝，拒绝时正式接纳数为 0、未创建 import request，B 保留，随后仅 C 经非空固定 Docker 检查接纳。原 checkout 始终保持 A。
+
+R2 技能路径修正复用现有正向用例：远端使用实际广告路径读取引用，在固定 Docker 执行脚本；修改宿主原技能后仍使用已冻结资源，技能正文与原题保持原文。GUI／后台远端完整组合、外部真实机器和其他插件明确延期，不纳入本轮验收；远端只支持显式 async:false。独立固定差异审查及干净候选关键复验由后续交付检查提供，本段不提前宣称完成。
+
+# 未发布：同步原生远端 R2（2026-10-31）
+
+实际宿主 CLI 在容器外，通过独立 SSH 配置和真实 Herdr0.9.5/protocol22 启动唯一远端 cwd 中的固定 Pi unbundled CLI 与当前补丁插件。本地确定性服务验证两次文件调用及另一轮四次文件/Docker调用：远端 read-after-Shell、二进制、执行位、删除全部经父审阅和非空 Docker 正式检查接纳，原 checkout 保持。模型/API/endpoint/thinking、工具/资源/运行文件摘要及私有 session 路径有真实 ready/activation 回执；supervisor 实际 ChildProcess close 与 starttime 绑定。正式检查仍由宿主的同一公共 agent-sync 执行。
+
+Shell 夹具使用明确记录的共享 daemon 隔离 volume 映射，模型无 socket／用户目录挂载；不冒充外部远端 Docker 验收。保留了空 catalogue（缺 XDG_STATE_HOME）、本地路径规范化、未映射 contact_supervisor、bundled SDK 10ms 零 HTTP 超时以及 Docker cp UID 权限失败。旧 fixture 的默认 state 残留另经精确归属核验清理；不能沿用先前“所有 host state 已隔离”的说法。无全局安装、真实密钥、付费调用或内核修改。本段是 R2 历史检查点；限定取消／重连／冲突补验见上方 R3。GUI／后台远端及外部机器不在本轮范围。
+
+# 未发布：原生后台与递归协作检查点（2026-10-31）
+
+当前源码及实际安装的固定 pi-subagents 插件通过 31/31 原生／宿主／IPC 测试，相关 package/helper/import/GUI controller 回归 60/60。覆盖 CLI 与 GUI 控制器 async、原生递归 detached、并行／嵌套 workflow、创建者逐层审阅及非空 Docker 正式接纳；显式 action resume 和原 workflow 简写使用新尝试并保留旧会话字节，附加 chain 在启动前拒绝。
+
+实际文件写入半途暂停并并发请求子代理，验证共享源码屏障不会复制半写内容；真实认证 socket 断开、宿主被终止且 Docker 仍运行、启动期取消和 503 单次请求分别保留正确未知／停止边界。未知结果不得导入或释放包占用，重新查看任务零模型重发。源文件、实际 bundle、公开类型及安装候选仍逐字节追溯。具体原始失败、命令和过程清理见本地 native-background-report.md B3。远端执行、未知宿主重启接管、付费服务商质量／费用、Windows 实机及浏览器点击没有由这些测试证明；无全局安装、发布或内核改动。
+
+# 未发布：原生前台工作流检查点（2026-10-31）
+
+`native-host-admission-v2` 接通原生前台 subagent 和原脚本 workflow 引擎。源码入口、实际安装的固定 npm 插件与 localhost 模型通过普通 CLI，以及 GUI 控制器 session.create/task.submit 路径，验证动态顺序／并行、嵌套创建者覆盖层及显式回交、具名 runs.host 的真实断网 Docker 执行。五项原生入口场景都使用原有非空 Docker 检查与正式接纳；GUI 证据是控制器真实使用路径，不冒称浏览器点击／物理键盘验收。原目录未自动覆盖。
+
+`node --test test/pi-plugin-host.test.js test/integration/pi-subagents-host.mjs test/integration/pi-subagents-native.mjs` 10/10；相关 package/plugin/import/GUI controller 回归 60/60。冻结后的原生助手租约补充另做 CLI／GUI 短复验，命令、原始失败和证据见本地 native-local-report.md。模型/API/endpoint 在 SDK 启动及实际 provider 请求前核对冻结的调用方配置；运行配置不借助并发环境变量切换。用量与原生聚合分开保留，未知成本仍为 null。前台结果等到 SDK 清理及原插件结果处理都完成才冻结；抛错／超时保留未知及包占用。
+
+原生 async:true 的当前本地验收覆盖真实 detached 提前返回、父任务继续读取、重复原始 runner 认证拒绝、延迟嵌套 A→C 旧版本拒绝、原生 stop／迟到输出以及宿主丢失时 Docker 仍运行的 unknown／包阻断／show 零重发。GUI 控制器 async、detached 内原生并行 workflow、真实 SDK 启动期取消零子请求、503 单次请求无自动重试及带反馈的原生显式 resume 已补验；resume 保留旧会话字节并以新 SDK 身份和输入副本另记尝试。递归 detached 已验两层原生进程、同一 broker/owner 和实际父进程 close 回传，以及整条任务取消；workflow resume 简写走原解析器并保留原会话。IPC 查询与持久化失败另有确定性检查。remote、不同 cwd 映射、附加 chain 的多子恢复、verification/gate 及未适配 MCP bindings 仍拒绝；真实外部服务故障和重新接管未知后台任务未验。没有付费模型验收、全局安装、推送／发布或 agent-sync 内核改动。
+
+前台独立审查另修正绝对输出范围绕过与 native exec 丢失工具取消信号。真实固定插件的只读／限域场景中，运行材料 auth.json、兄弟源码与当前越界源码三个绝对目标均在额外模型请求／写入前拒绝；原字节保持。真实原生子会话的 required extension 在 Docker ready 后调用该子会话 ctx.abort，容器停止，父任务与无关助手继续完成并接纳。CLI／GUI 原有正向路径与嵌套路径按影响范围复验；具体失败、命令与证据见本地 foreground-review-fix-report.md。
+
+# 未发布：原生宿主合同检查点（2026-10-31）
+
+候选变换升级为 `native-host-admission-v2`；公开模块、类型、源文件与实际 bundle 均有固定前后哈希，保留原前台单助手兼容。`node --test test/pi-plugin-host.test.js test/integration/pi-subagents-host.mjs` 4/4 通过：固定 npm 插件公开原生委派在持久化失败时零模型请求，允许后实际创建 Pi SDK 子会话、记录真实 sessionId，真实扩展超过关闭等待后写文件时保留 `shutdownCompleted:false`。该检查使用 localhost 确定性模型，没有付费调用。它只验证插件合同接点，不是正常 CoThink native workflow/background/remote 验收；这些入口仍受保护。合同与剩余边界见 [宿主合同](docs/pi-subagents-host-contract.md)。
+
+独立审查后补验实际已打旧补丁安装的同版本迁移／重复安装，并拒绝且保留被改动的旧文件；真实抛错关闭处理器不再被 Pi 的异常吞掉机制误报干净停止。真实 default factory 并发两次创建同一 receipt 只产生一次 session_start，终结后的第三次创建同样在启动前拒绝。检查仍为上述 4 个用例，实际集成用例扩展覆盖这些场景；原有 CLI 助手与非空 Docker 检查接纳也按影响范围复验。
+
+# 0.8.8-plugins.1 本地未发布候选：Pi 插件来源、动态工具与基础界面（2026-10-31）
+
+最终源码核心检查 316 项中 313 通过、0 失败、3 项既有 Windows 平台跳过；GUI 87/87、内核 48/48、工作入口 37/37。终端 PTY 与 slash 原期限通过；首次 changelog 夹具误计已授权的 CoThink 启动查新，保留失败后用 COTHINK_NO_UPDATE_CHECK=1 隔离该夹具，零联网／零生成通过。文档检查通过。
+
+候选以 npm run pack:npm 重新构建 GUI，并实际安装到项目内全新独立 prefix；验收通过 COTHINK_TEST_PACKAGE_ROOT 与 COTHINK_TEST_CLI 加载安装后的产品和 SDK，而非源码。固定公开 pi-subagents@0.84.0 + foreground-unlimited-v1 的 10/10 实际集成通过，覆盖 CLI／GUI、成员与嵌套、并行冲突、取消与原 requestId 恢复；其中正常 CLI／GUI 还在断网固定 Docker 中检查精确成果内容，finalCheck.verification 为 passed，其他空检查场景仍仅证明 unverified 接纳机制。安装后的动态工具／启动与关闭输出保护、GUI 基础交互和真实 Chromium、local／Git／项目来源共 9/9 通过。首个验证包 15,172 个常规文件与安装内容逐字节相同；文档更新后最终包的运行代码、GUI 静态资源和依赖与该已验证包另做字节一致核验。确切源码版本、产物哈希、prefix 和失败日志保存在本地阶段交付报告，不以版本号代替产物身份。
+
+动态检查点独立审查修正两项结果保护：旧已应用 requestId 重放只观察回执，不重置其他 change／当前副本；awaited session_shutdown 产生的文件在关闭后固定保存，未审阅结果使任务 partial，既有接纳历史不回滚、不自动导入。既有正常 CLI 夹具扩展为普通、next_change 后旧 ID／新 pending copy 重放、关闭钩子输出三场景；与丢回执恢复共 4/4，相关回归 52/52。另修正空包列表的手工模板冲突漏报、旧显式空资源快照缺 project 字段的兼容；原测试 2/2 通过。终端既有脚本改验当前允许原生加载、纯答一请求无原生工作工具、本地命令零新增调用，未绑定生成拒绝后仍能重载继续，原期限完整通过。首轮全量同时运行重复 Docker 入口造成两项 GUI did-not-settle，原失败保留；其他套件结束后原期限隔离复验 2/2，不加时、不跳过 Docker。内核 48/48、工作入口 37/37 已通过；最终顺序全量复验另列。
+
+源码来源检查点 `3110b18` 与修复 `3db6d10` 经独立复审通过。现有包管理套件 21/21；新增项目 delta 测试验证个人安装根有／无冗余项目目录时仍保留技能并禁用指定扩展。项目 Git 槽发布后 SIGKILL 的 v2 事务测试覆盖错误 home 拒绝恢复、外部编辑保留及明确恢复；原 v1 测试单独保留，不将它称为 v2 证明。Git 使用 localhost Git HTTP 固定 ref，未验证公网私有认证。local 卸载保留原文件，伪造／复制项目 .pi 不获得 home 授权，项目提交故障仍可打开本地历史／Team 壳但阻止生成。
+
+普通 CLI 工作入口已实际执行 session_start 注册、tool_call 后续定义替换、无文件工具返回，以及独立启动文件和工具文件的明确审阅、导入与正式接纳。宿主 absolute native cwd 文件路径映射仍走公共文件工具；宿主修改后原生副本重取一致当前输入。该测试使用安装的本地扩展与 localhost 确定性模型，不依赖测试专用 nativePluginTools 开关，工具调用不伪装成模型助手。
+
+基础 GUI 控制器的实际 select/input/confirm/notify、错误会话回复拒绝、关闭取消、原生 custom 明确拒绝、本地命令禁止未绑定生成、入口及相对 helper.js 重载、顶层 await 与 SDK SessionManager 共享身份已通过零模型测试。真实 Chromium 点击覆盖提示、字面脚本文字安全显示、slash 命令、原生组件错误和重载后旧命令消失；400 是该明确拒绝的预期 HTTP 结果，非前端脚本错误。32 项现有插件／控制器回归在最终 vendor 依赖上通过。实际 GUI 正常 ONE 工作通过公开安装的 pi-subagents 助手生成文件、创建者审阅与正式接纳；父会话使用受管后端，未加载原生终端管理器。
+
+Pi `1.4.0-cothink.2` 与 Jiti `2.7.0-cothink.1` 按固定源码构建并在本地依赖中核对安装／tgz loader SHA 一致。最初 tryNative:false 无效；仅 entry evalModule 的探针仍会缓存相对 JavaScript，保留失败，最终改为精确的 uncached async ESM 条件补丁与共享 virtual modules。独立前缀候选与上述本地回归已验证；第三方任意插件、收费模型、Windows／物理终端仍未验证。任意脱离 Promise 的后台 JavaScript／外部模型环路不在通用追踪保证内，已知 pi-subagents 原生 workflow/background/remote 等未适配路由继续阻断。
+
+# 未发布：Pi 插件工作接入第二阶段（2026-10-31）
+
+适配 `pi-subagents@0.84.0 + CoThink foreground-unlimited-v1`，仅消费方改动；agent-sync 内核未变。安装候选核验固定 npm integrity、源文件和实际分拆 bundle 的补丁前后哈希，变换不在 import 时执行。公开前台单助手请求显式 `timeoutMs:0` 在创建 deadline 前归一成无时限；正常 CLI 实际零值请求已执行。省略与正数分支保留上游语义的判断来自精确源码审查，未额外执行三十分钟等待或完整短正数超时验收，不能据此称所有原生路由无限制。
+
+真实安装 + localhost 确定性服务 + 正常 `ask`/`runTurn` 工作入口覆盖主模型助手、正式成员助手、子／孙助手及创建者当前文件输入、实际并行兄弟、过期成果保留与明确反馈、父审阅及原有正式接纳。选定技能的引用和脚本实际读取；主／成员通过现有内核 Docker bash 执行所读代码，嵌套助手使用独立副本与只读 `/resources` 执行实际脚本。取消样例等待 `docker inspect` 证实孙助手容器正在运行后取消，记录容器 exit137、两个插件 runner exit0 与停止时间，无导入或接纳。恶意源码 `.pi` 重试／压缩／扩展设置不能覆盖固定配置，HTTP503 只有一次助手请求，未知用量保持 null。命令为 `node --test test/integration/pi-subagents-work.mjs`；原始失败及修复记录保留在本地忽略证据目录。
+
+消费方行为检查覆盖公共一致快照、独立副本、增删／二进制／执行位、范围与链接拒绝、过期输入、响应丢失按原 requestId 查询、审阅失效与原目录保留。异步原生关闭的行为检查确认清理未结束时包变更仍被占用阻断。现有内核 48 项检查通过，包括真实 Docker；这不等于插件任意 JavaScript 被操作系统沙箱约束。
+
+独立审查后修正四项重要问题：未知导入必须先查询旧 ID，不能通过拒绝结果清除门槛；正式成员／工具取消传播到所属助手后代，保留无关助手；已登记上游 0.84.0 的同版本 install 会实际补齐候选补丁；runner 在 SDK／插件 await 前锁存启动取消。针对性实际插件检查证明旧版本迁移、启动零请求取消、完整 abandon_member 停止及无关助手继续接纳；已有失回执测试扩展了拒绝／not_found 的行为检查。第二轮复审还修正了通用／主模型放弃草稿的队列与未知导入门槛，以及 await inspect 期间创建者取消后的权限复核与有效信号传递。实际公共内核注入该取消窗口后没有导入意图／编辑；正常 runTurn 中放弃未知导入被拒绝，原 ID 查清后才能明确丢弃整份草稿。完整初轮回归数字保留如下，修正后按影响范围复验，不冒称重复了全部 GUI／内核检查。
+
+最终本地回归：`npm test` 309 项中 306 通过、0 失败、3 项既有 Windows 平台跳过；`npm run test:gui` 85/85 通过；`npm run build:gui` 成功，保留既有 >500 kB chunk 提示；文档检查通过。真实插件整组六个场景通过，最后仅对受资源选择／输出额度及真实二进制、删除、执行位断言影响的两个既有场景复验，2/2 通过。`npm test` 已包含 `test:work` 的原工作入口文件，不重复运行同组检查。安装包独立前缀、插件专属 GUI 点击、收费模型与 Windows 实机未计为已通过。
+
+未验证边界：收费模型质量和账单、Windows／实体终端、真实 GUI 点击验收、任意第三方扩展、原生后台／workflow／remote／resume 路由。GUI 本轮仅投影、状态文字、已有接口测试与构建；通用兼容交互后续单独验收。助手用量来自可观察请求及插件报告，目录估价与服务商账单分开；Team 调用小计与插件轮数小计分别标注，缺失费用不产生已知整任务总费用。主／成员没有任意资源挂载，需相对资源文件的脚本使用已适配助手路径。模型权限内的源码结果通过公共 edit 与既有 prepare/review/accept 接纳，不能把安装、SDK 退出或文本完成等同于正式接纳。
+
+# 未发布：Pi 插件兼容第一阶段（2026-10-30）
+
+固定 `pi-subagents@0.84.0`（npm，来源 `nicobailon/pi-subagents`），从真实 `cothink install npm:pi-subagents@0.84.0` 入口安装到临时数据根；Pi 加载注册工具与命令，父模型经插件创建实际前台 SDK 子会话，子会话调用原生 read，结果返回父模型。模型服务为 localhost 确定性 fixture，不是收费模型或质量验证。命令：`node --test test/integration/pi-subagents.mjs`。
+
+独立审查发现并修复 `start_work` 同名工具可绕过原生工具门槛的问题：加载后、过滤与会话创建前检查唯一宿主归属，reload 重查；已安装扩展单独运行及与真实宿主并存时均在模型请求前拒绝，工具执行体不会运行。针对插件、runtime、讨论与恢复的 37 项检查通过，原宿主交接保持可用。
+
+该集成测试显式设置 Pi 数据根、宿主 SDK 根、agent 定义和独立工作目录，并通过 `createRuntime({nativePluginTools:true})` 内部适配器入口启用工具。常规 CLI/GUI 工作尚未使用该入口；普通问答及未适配工作仍不开放原生工具和命令。未完成助手身份/费用整合、独立成果导入、后台与嵌套子代理、重开恢复、Windows 与 GUI 实测，不能把本阶段机制通过称为完整产品兼容。依赖脚本为受信任原生代码，候选回退仅覆盖受管文件，不是宿主副作用回滚。
+
+# 0.8.7-modes.1 发布候选（2026-10-29）
+
+英文模式职责与 Option+M 快捷键。独立候选核心测试 302 通过、0 失败、3 项既有 Windows 专项跳过；GUI 83/84 首轮通过，唯一浏览器失败来自新工作区尚未构建静态资源，构建后该用例复验通过。上一轮快捷键专项 12/12，包括真实 CLI/PTY 和 GUI DOM；独立代码审查无阻断项。安装包另行验证，记录保存在本地 work/release；真实模型质量、Windows 实机与实体键盘尚未验证。
+
+# 0.8.6-fidelity.1 npm 发行候选（2026-10-28）
+
+基于 main 的题意保真实现与本地验收；本次只更新根版本、README、CHANGELOG 与发行记录，运行代码、Pi SDK 与 agent-sync 不变。核心 302 通过（3 项既有 Windows 平台跳过）、视觉 45/45、GUI 82/82 的证据继续适用于相同运行代码。GitHub Actions 因账户付款／spending limit 问题未启动，不能视为远端通过；本次安装包另按实际入口验证。真实模型语义质量与 Windows 实机仍未验证。
+
+---
+
+# 未发布：委派题意与独立视觉审查（2026-10-28）
+
+按已确认的 task-fidelity 计划修改 CoThink 消费方：宿主注入原题，成员先只读独立理解，再接收职责／建议；冲突暂停保留草稿，经同一成员收到具体更正并成功确认后恢复。最终视觉审查使用同一主模型的独立短上下文，唯读原题与当前集成版本图像事实，通过 submit_visual_review 的观察、理由和结论影响交付。工具仅读取三个模型字段，版本、图片哈希及身份不能被模型额外参数覆盖。
+
+最终固定运行源码下的本地验收：`npm test` 305 项中 302 通过、0 失败、3 项既有 Windows 专属检查按平台跳过；`npm run test:visual` 45/45；`npm run test:gui` 82/82；`npm run build:gui` 成功，保留既有 >500 kB chunk 提示。测试使用 localhost 模型 fixture、真实 Pi SDK、实际 agent-sync API 与离线 Docker Chromium。浏览器完成制作、查看当前版本审查、读取 PNG，1280×800／1024×768／800×600 无横向溢出及控制台错误；另有 DOM 用例核对未解决冲突、已完成但不符合的审查不会显示成成功。
+
+覆盖原题反转保真、准备阶段隔离与伪造写入拒绝、空／503 准备不重发、旧委派字段拒绝、半成品冲突暂停与同草稿恢复、实际图像请求失败的 collect 摘要、独立审查不含旧解释、match／mismatch／uncertain／缺结论／503 分支、红→蓝新版本复验、同版本补拍新视口、过期／失败判断的 GUI 展示。请求快照按来源检查英文控制文字和各独立上下文的回复语言规则，中文原题、技能正文及具体反馈保留。首次委派通常至少增加一次模型请求；冲突确认、具体返工按实际调用记账；最终独立检查替换原最终看图调用，ONE 不引入副模型。
+
+保留的失败包括：最初 Docker 未运行；测试用例向未读取的既有文件写入被正确拒绝，夹具改为新建草稿；错误地将实际小数采样时刻用作请求整数时刻，修复为分别记录；模型额外字段可覆盖审查元数据，复现后改为显式字段白名单。首轮并行重型测试中，视觉基准因运行源码变化主动停止，GUI 两项超过既有等待窗口；原日志保留，未改超时、skip 或成功定义，固定源码后串行通过。GUI 等待失败与并发负载的关系是推断。
+
+本地证据位于 `work/task-fidelity/`：progress.md、final-checks.json、完整失败／成功日志、requests/ 实际请求及 gui/ 截图。`packages/agent-sync`、vendor、依赖锁和旧真实实验未修改；本次未提交、推送、发布或替换全局安装。未进行收费模型对照、Windows 实机或新安装包验收。fixture 只能证明上述机制与规则传递，不能证明模型必然识别题意、遵循语言规则或提高语义／审美质量、误报率和成本收益。
+
+---
+
+# 英文角色控制提示词（2026-10-28）
+
+修正成员提示词误用 next_change/接纳流程及只读任务被要求制作的职责冲突，合并同一上下文中的重复控制规则。五个角色提示词及运行时补充控制文字改为英文，用户原题、委派/反馈内容、技能正文与中文固定评审标题保留。工具权限、调度偏好、调用预算、版本与未知结果政策保持原合同。
+
+本地验证：核心 297 项中 294 通过、3 项原有 Windows 专属跳过；视觉 37/37、展示 15/15；定向委派/反馈/权限验证 41/41。最初三个夹具通过中文“具体反馈”判断修订阶段，翻译后误判，已改为匹配实际反馈内容；benchmark 通过工具权限识别角色。失败日志保留在本地 work/prompt-language。测试确认实际上下文与工具权限、PNG回传、修订及交付机制，不能证明英文比中文更有效；未进行付费模型语言对照。
+
+---
+
+# 未发布：HTML/SVG 视觉工作流（2026-10-28）
+
+本轮修改归属为 **CoThink 消费方**：单次制作入口、冻结技能消费、preview_html 公共 API 适配、固定容器 renderer、实际图片请求证据、最终集成版本收尾、GUI 截图读取与展示、新 benchmark 冻结条件。`packages/agent-sync` 和 vendor 没有修改；根依赖锁与施工前字节一致，原有未提交修改保留。无内容变化的 exec 产生新 privateVersion 是当前内核行为，不标成内核缺陷；用户批准改为保存前后版本并通过公共 inspect 的空差异证明内容未变。
+
+验证使用 localhost Pi/provider fixture 与真实 Docker Chromium，不是付费模型质量评估。可检查证据位于本地 `work/visual-workflow/`，不进入安装包。
+
+- 主套件 `npm test`：297 项，294 通过，0 失败，3 项现有 Windows 专属检查在 macOS 跳过。
+- GUI 套件：80 项通过。真实浏览器完成无项目草稿保留、关联项目、ONE 制作、重复点击约束、最终 PNG 读取；1280×800、1024×768、800×600 无横向溢出和控制台错误。截图见 `work/visual-workflow/gui/`。
+- 视觉验收：真实 PNG、多帧动画差异、桌面/手机视口、click/fill/key、外联 HTTP/WebSocket 零请求、file URL 拒绝、辅助产物隔离、取消、失控页面清理、缺浏览器、超大 PNG 拒绝、有效 PNG 公共分页读取。
+- 实际 provider payload 包含 PNG；ONE 红→蓝修订与 CoThink 成员具体反馈都通过；最终集成再截图、再次修订再检查、API 拒图保留已接纳成果且不重试均通过。文字“看过图”不计作图片证据。
+- 运行中改变技能源元数据不会进入新的成员上下文。CLI 管道保留多行任务原字节；真实 PTY 的 /make-html 继承 ONE，下一条仍为 ONE 纯答。
+- 新 benchmark 的九个合成 fixture 工作并发通过，冻结相同原题、技能与预览能力；旧真实轮次、顺序、选票未运行或重写。新制作轮次对临时服务商错误不自动重试。
+
+保留的失败：最初 Docker 未启动；Debian/浏览器资产下载缓慢或中断；原“privateVersion 不变”假设被真实 exec 与 true 对照否定；新成员重新加载技能描述的问题已修复；测试清理脚本未持续读取 PTY 导致退出等待的问题已修复。曾同时运行三套重型回归，出现 GUI fixture 未及时结束及九任务 fixture 的一次 connection-unknown；原日志保留，未调宽时限或修改成功定义，随后各套独立运行通过。并发负载关联只是推断，未声称已独立定位该次连接失败的根因。
+
+镜像、脚本、浏览器资产及 Debian 实际版本记录见 `docker/visual-preview-manifest.json` 与 `docker/visual-preview-packages.lock`。当前实测 Linux ARM64；Windows Docker / Linux x64、物理 IME 与真实模型题意/审美收益未验证。Vite 仍有既有的大 chunk 提示。未发布、未推送、未替换全局安装；候选打包与隔离安装的实际结果继续写入本地进度记录。
+
+---
+
 # 0.8.5-prompts.1：主副模型提示词与授权交接（2026-10-26）
 
 主模型增加实际候选的任务比较与默认相对顺序，副模型明确独立判断、实际产物和有依据的交接。成员消息使用内核当前授权携带 reason、scope/readScope/readOnly、固定 checks 与执行环境；既有入口检查覆盖独立成员交付、授权刷新及只读转写入。agent-sync 内核及依赖字节保持不变。

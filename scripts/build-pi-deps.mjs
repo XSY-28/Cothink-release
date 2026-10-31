@@ -6,10 +6,12 @@ import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
-const cache = resolve(process.env.COTHINK_PI_BUILD_CACHE ?? join(root, "work/pi-agent-build/upstream"));
+const spec = JSON.parse(readFileSync(join(root, "vendor/pi-patches/source.json"), "utf8"));
+const cache = resolve(
+  process.env.COTHINK_PI_BUILD_CACHE ?? join(root, "work/pi-agent-build", spec.upstream.tag, "upstream"),
+);
 const work = dirname(cache),
-  out = join(root, "vendor/pi-deps"),
-  spec = JSON.parse(readFileSync(join(root, "vendor/pi-patches/source.json"), "utf8"));
+  out = join(root, "vendor/pi-deps");
 mkdirSync(out, { recursive: true });
 mkdirSync(work, { recursive: true });
 const hash = (p) => createHash("sha256").update(readFileSync(p)).digest("hex");
@@ -29,7 +31,8 @@ function run(command, args, cwd = work) {
 function check(path, expected) {
   if (hash(path) !== expected) throw Error("Source hash mismatch: " + path);
 }
-const archive = join(work, "pi-v1.0.0.tar.gz");
+const piVersion = spec.upstream.tag.slice(1);
+const archive = join(work, `pi-${spec.upstream.tag}.tar.gz`);
 if (!existsSync(archive)) run("curl", ["-fL", "--retry", "0", spec.upstream.archiveUrl, "-o", archive]);
 check(archive, spec.upstream.archiveSha256);
 if (!existsSync(join(cache, "package-lock.json"))) {
@@ -46,7 +49,7 @@ if (!existsSync(data)) {
   const packed = JSON.parse(
     run("npm", [
       "pack",
-      "@earendil-works/pi-ai@1.0.0",
+      spec.catalog.package,
       "--json",
       "--ignore-scripts",
       "--pack-destination",
@@ -77,7 +80,7 @@ const pack = (target) =>
   JSON.parse(run("npm", ["pack", "--json", "--ignore-scripts", "--pack-destination", out], target))[0];
 for (const [name, version, sourceHash] of [
   ["openai", "7.19.0", "d7a153e93818d025cc1ae82bf5f09c89d615dfe7a223474f3e0b7c558af12ab4"],
-  ["@anthropic-ai/sdk", "0.124.0", "f10ce5731305a469b95177a1f44d684f95ea2a2bf503b50a33fd13b6dc007170"],
+  ["@anthropic-ai/sdk", "0.129.0", "8624fbfefebcd5613cc430b38e238f4d88f9c97bf7f394016a077d8193a72f6e"],
 ]) {
   const original = dirname(sourceRequire.resolve(name)),
     pkg = JSON.parse(readFileSync(join(original, "package.json")));
@@ -116,7 +119,7 @@ for (const name of ["dist", "native", "README.md"])
     cpSync(join(tuiSource, name), join(tuiTarget, name), { recursive: true });
 const tuiPkg = JSON.parse(readFileSync(join(tuiSource, "package.json")));
 delete tuiPkg.scripts;
-tuiPkg.version = "1.0.0";
+tuiPkg.version = piVersion;
 tuiPkg.cothinkPatch = "preserve-whitespace-v1";
 writeFileSync(join(tuiTarget, "package.json"), JSON.stringify(tuiPkg, null, 2));
 cpSync(join(cache, "LICENSE"), join(tuiTarget, "LICENSE"));
@@ -131,21 +134,38 @@ artifacts.push({
   integrity: tuiPack.integrity,
   build: "fixed upstream TypeScript build; preserveWhitespace defaults false",
 });
+// moduleCache:false must also refresh asynchronous ESM dependencies; preserve Jiti's normal cached mode.
+const jitiSpec=spec.jitiPatch;
+if(jitiSpec) {
+  const resolveJiti=createRequire(join(cache,"packages/coding-agent/package.json"));
+  const original=dirname(dirname(resolveJiti.resolve("jiti"))),target=join(cache,"cothink-jiti-build");
+  const pkg=JSON.parse(readFileSync(join(original,"package.json")));
+  if(pkg.version!==jitiSpec.version)throw Error("Unexpected Jiti version");
+  check(join(original,jitiSpec.file),jitiSpec.originalSha256);
+  rmSync(target,{recursive:true,force:true});cpSync(original,target,{recursive:true});
+  const path=join(target,jitiSpec.file),text=readFileSync(path,"utf8");
+  if(text.split(jitiSpec.before).length!==2)throw Error("Jiti patch must match exactly once");
+  writeFileSync(path,text.replace(jitiSpec.before,jitiSpec.after));check(path,jitiSpec.patchedSha256);
+  pkg.version=jitiSpec.revision;delete pkg.scripts;writeFileSync(join(target,"package.json"),JSON.stringify(pkg,null,2));
+  const result=pack(target);
+  artifacts.push({package:pkg.name,version:pkg.version,path:"vendor/pi-deps/"+result.filename,sha256:hash(join(out,result.filename)),integrity:result.integrity,build:"Pinned MIT Jiti; one exact moduleCache:false async ESM condition patch",source:jitiSpec});
+}
 const agentSource = join(cache, "packages/coding-agent"),
   target = join(cache, "cothink-agent-build");
 rmSync(target, { recursive: true, force: true });
 mkdirSync(target, { recursive: true });
-for (const name of ["dist", "docs", "examples", "README.md", "CHANGELOG.md"])
+for (const name of ["dist", "docs", "examples", "schemas", "containerization.md", "README.md", "CHANGELOG.md"])
   if (existsSync(join(agentSource, name)))
     cpSync(join(agentSource, name), join(target, name), { recursive: true });
 cpSync(join(cache, "LICENSE"), join(target, "LICENSE"));
 const pkg = JSON.parse(readFileSync(join(agentSource, "package.json")));
 delete pkg.scripts;
-pkg.version = "1.0.0-cothink.9";
+pkg.version = `${piVersion}-${spec.agentRevision ?? "cothink.1"}`;
+if(spec.jitiPatch)pkg.dependencies.jiti=spec.jitiPatch.revision;
 pkg.files = pkg.files.filter((p) => p !== "npm-shrinkwrap.json");
 pkg.files.push("LICENSE", "README.md");
 for (const name of Object.keys(pkg.dependencies))
-  if (name.startsWith("@earendil-works/")) pkg.dependencies[name] = "1.0.0";
+  if (name.startsWith("@earendil-works/")) pkg.dependencies[name] = piVersion;
 writeFileSync(join(target, "package.json"), JSON.stringify(pkg, null, 2));
 const packed = pack(target);
 artifacts.push({
@@ -165,7 +185,7 @@ writeFileSync(
   JSON.stringify(
     {
       version: 1,
-      piVersion: "1.0.0",
+      piVersion,
       sourceArchiveSha256: spec.upstream.archiveSha256,
       catalogArchiveSha256: spec.catalog.sha256,
       sourceFiles: spec.patchFiles,

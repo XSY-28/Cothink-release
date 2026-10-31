@@ -1,0 +1,1270 @@
+{
+  "package": "pi-subagents",
+  "version": "0.84.0",
+  "revision": "native-host-admission-v2",
+  "integrity": "sha512-IagE1hcBxLi82jTxTmcy/pIWckBuqhMH1GfAOe6/aIMVfnopMybCbcTMUS5K0CNy4tqSwHGleaXabaDmJS1QOg==",
+  "files": [
+    {
+      "path": "src/slash/delegation-request.js",
+      "before": "6fc1b44096b465670abb0d726b5dd11ee8673e5ac52864e8a3236a9c673c832b",
+      "after": "f34bfea75a8f56b86be5fb5ab832f9d52d63bbbb69b7eaef6076a56d9fcc07fb",
+      "replacements": [
+        [
+          "value.timeoutMs < 1",
+          "value.timeoutMs < 0"
+        ],
+        [
+          "timeoutMs must be an integer >= 1.",
+          "timeoutMs must be an integer >= 0 (0 disables the foreground single-child run deadline)."
+        ]
+      ]
+    },
+    {
+      "path": "bundle/chunk-235AWJUQ.js",
+      "before": "8ca9682c197438c39908d555236f99af71ccb3e8cb46a7c841a533be4a843aa2",
+      "after": "764c5bcb7391d5193456b08be5df9f90ba9aaeaa8032835db574828f19bf2836",
+      "replacements": [
+        [
+          "value.timeoutMs < 1",
+          "value.timeoutMs < 0"
+        ],
+        [
+          "timeoutMs must be an integer >= 1.",
+          "timeoutMs must be an integer >= 0 (0 disables the foreground single-child run deadline)."
+        ],
+        [
+          "import {\n  SubagentFleetStatus,\n  buildAsyncStatusSnapshotForState,\n  clearLegacyResultAnimationTimer,\n  readMainThinkin",
+          "import { hostAgentDirectory } from \"../src/runs/shared/host-integration.js\";\nimport {\n  SubagentFleetStatus,\n  buildAsyncStatusSnapshotForState,\n  clearLegacyResultAnimationTimer,\n  readMainThinkin"
+        ],
+        [
+          "if (recovering && ctx.hasUI && config.autoResume !== false) {",
+          "if (recovering && ctx.hasUI && config.autoResume !== false && !hostAgentDirectory()) {"
+        ],
+        [
+          "import {\n  SubagentFleetStatus,\n  buildAsyncStatusSnapshotForState,\n  clearLegacyResultAnimationTimer,\n  readMainThinkin",
+          "import { headlessHostUI } from \"../src/runs/shared/host-integration.js\";\nimport {\n  SubagentFleetStatus,\n  buildAsyncStatusSnapshotForState,\n  clearLegacyResultAnimationTimer,\n  readMainThinkin"
+        ],
+        [
+          "const fleetStatus = fleetViewEnabled",
+          "const fleetStatus = fleetViewEnabled && !headlessHostUI()"
+        ],
+        [
+          "import {\n  SubagentFleetStatus,\n  buildAsyncStatusSnapshotForState,\n  clearLegacyResultAnimationTimer,\n  readMainThinkin",
+          "import { headlessHostAPI } from \"../src/runs/shared/host-integration.js\";\nimport {\n  SubagentFleetStatus,\n  buildAsyncStatusSnapshotForState,\n  clearLegacyResultAnimationTimer,\n  readMainThinkin"
+        ],
+        [
+          "function registerSubagentExtension(pi) {",
+          "function registerSubagentExtension(pi) {\n    pi=headlessHostAPI(pi);"
+        ]
+      ]
+    },
+    {
+      "path": "src/runs/foreground/subagent-executor.js",
+      "before": "06cd1f2efae694f7dcf4c86d2b627ef967c6c3fe368a9c78cabd9a5f14234e76",
+      "after": "21d5f7d390844f5aabe0174905d9d80d94a8f7a473370d4f1c0378c3a17a0cbd",
+      "replacements": [
+        [
+          "function resolveSingleAgentLaunchTimeout(params, async, configDefaultTimeoutMs) {\n",
+          "function resolveSingleAgentLaunchTimeout(params, async, configDefaultTimeoutMs) {\n    // CoThink pi-subagents-0.84.0 foreground-unlimited-v1: never pass raw zero to deadline arithmetic.\n    if (params.timeoutMs === 0 && !async && params.agent && !params.chain?.length && !params.tasks?.length && params.workflowScript === undefined && params.maxRuntimeMs === undefined) return {};\n"
+        ],
+        [
+          "import { randomUUID } from \"node:crypto\";\nimport * as fs from \"node:fs\";\nimport * as path from \"node:path\";\nimport { dis",
+          "import { admitHostOperation } from \"../shared/host-integration.js\";\nimport { randomUUID } from \"node:crypto\";\nimport * as fs from \"node:fs\";\nimport * as path from \"node:path\";\nimport { dis"
+        ],
+        [
+          "const executeRequest = async (_id, params, signal, onUpdate, ctx, preserveActiveSession = false, parentModelOverride) => {",
+          "const executeRequest = async (_id, params, signal, onUpdate, ctx, preserveActiveSession = false, parentModelOverride) => {\n        const managedHostOperation = await admitHostOperation({kind:\"request\",cwd:ctx.cwd,parentSessionId:ctx.sessionManager.getSessionId(),nativeParams:params,toolCallId:_id});"
+        ],
+        [
+          "const timeout = requestParams.timeoutMs ?? requestParams.maxRuntimeMs ?? (requestParams.async === false ? resolveConfigDefaultTimeoutMs(deps.config.timeoutMs) ?? DEFAULT_FOREGROUND_TIMEOUT_MS : undefined);",
+          "const timeout = requestParams.timeoutMs ?? requestParams.maxRuntimeMs ?? (managedHostOperation.hostManaged ? undefined : requestParams.async === false ? resolveConfigDefaultTimeoutMs(deps.config.timeoutMs) ?? DEFAULT_FOREGROUND_TIMEOUT_MS : undefined);"
+        ],
+        [
+          "const foregroundTimeout = resolveSingleAgentLaunchTimeout(effectiveParams, effectiveAsync, resolveConfigDefaultTimeoutMs(deps.config.timeoutMs));",
+          "const foregroundTimeout = managedHostOperation.hostManaged && params.timeoutMs === undefined && params.maxRuntimeMs === undefined ? {} : resolveSingleAgentLaunchTimeout(effectiveParams, effectiveAsync, resolveConfigDefaultTimeoutMs(deps.config.timeoutMs));"
+        ],
+        [
+          "script: workflowScript,\n",
+          "script: workflowScript,\n                    managedNoRetry:managedHostOperation.hostManaged===true,\n"
+        ],
+        [
+          "script: requestParams.workflowScript,\n",
+          "script: requestParams.workflowScript,\n                    managedNoRetry:managedHostOperation.hostManaged===true,\n"
+        ],
+        [
+          "const selectedAgents = selectedAgentNames.map((name) => agents.find((agent) => agent.name === name));",
+          "const selectedAgents = selectedAgentNames.map((name) => agents.find((agent) => agent.name === name));\n        if(managedHostOperation.hostManaged && selectedAgents.some(agent=>agent?.runner || agent?.launcher || agent?.machine)) return buildRequestedModeError(effectiveParams,\"This managed native route supports local Pi SDK children only; external/placed runners require their own admitted adapter.\");"
+        ],
+        [
+          "contextPolicy.usesFork && deps.config.forkContext?.mode === \"pruned\"",
+          "!managedHostOperation.hostManaged && contextPolicy.usesFork && deps.config.forkContext?.mode === \"pruned\""
+        ],
+        [
+          "import { randomUUID } from \"node:crypto\";\nimport * as fs from \"node:fs\";\nimport * as path from \"node:path\";\nimport { dis",
+          "import { withHostOperation } from \"../shared/host-integration.js\";\nimport { randomUUID } from \"node:crypto\";\nimport * as fs from \"node:fs\";\nimport * as path from \"node:path\";\nimport { dis"
+        ],
+        [
+          "const executeRequest = async (_id, params, signal, onUpdate, ctx, preserveActiveSession = false, parentModelOverride) => {",
+          "const executeRequest = (_id, params, signal, onUpdate, ctx, preserveActiveSession = false, parentModelOverride) => withHostOperation({kind:\"request\",cwd:ctx.cwd,parentSessionId:ctx.sessionManager.getSessionId(),nativeParams:params,toolCallId:_id}, admitted=>executeAdmittedRequest(_id,params,signal,onUpdate,ctx,preserveActiveSession,parentModelOverride,admitted));\n    const executeAdmittedRequest = async (_id, params, signal, onUpdate, ctx, preserveActiveSession = false, parentModelOverride, managedHostOperation = {}) => {"
+        ],
+        [
+          "        const managedHostOperation = await admitHostOperation({kind:\"request\",cwd:ctx.cwd,parentSessionId:ctx.sessionManager.getSessionId(),nativeParams:params,toolCallId:_id});",
+          ""
+        ],
+        [
+          "import { randomUUID } from \"node:crypto\";\nimport * as fs from \"node:fs\";\nimport * as path from \"node:path\";\nimport { dis",
+          "import { validateHostOutput } from \"../shared/host-integration.js\";\nimport { randomUUID } from \"node:crypto\";\nimport * as fs from \"node:fs\";\nimport * as path from \"node:path\";\nimport { dis"
+        ],
+        [
+          "function writeWorkflowAggregateOutput(outputPath, text, producedChildOutputPaths) {",
+          "function writeWorkflowAggregateOutput(outputPath, text, producedChildOutputPaths) {\n    validateHostOutput(outputPath);"
+        ],
+        [
+          "import { withHostOperation }",
+          "import { withHostOperation, hostOperationContext }"
+        ],
+        [
+          "admitted=>executeAdmittedRequest(_id,params,signal,onUpdate,ctx,preserveActiveSession,parentModelOverride,admitted)",
+          "admitted=>executeAdmittedRequest(_id,params,signal,onUpdate,hostOperationContext(ctx,admitted),preserveActiveSession,parentModelOverride,admitted)"
+        ],
+        [
+          "import { withHostOperation, hostOperationContext }",
+          "import { withHostOperation, hostOperationContext, admitHostResume }"
+        ],
+        [
+          "target = resolved;",
+          "target = await admitHostResume(resolved);"
+        ],
+        [
+          "import { validateHostOutput }",
+          "import { validateHostOutput, withHostSourceOutput }"
+        ],
+        [
+          "function writeWorkflowAggregateOutput(outputPath, text, producedChildOutputPaths) {",
+          "async function writeWorkflowAggregateOutput(outputPath, text, producedChildOutputPaths) {\n    return withHostSourceOutput(outputPath,()=>writeAdmittedWorkflowAggregateOutput(outputPath,text,producedChildOutputPaths));\n}\nfunction writeAdmittedWorkflowAggregateOutput(outputPath, text, producedChildOutputPaths) {"
+        ],
+        [
+          "function formatWorkflowResultText(input) {",
+          "async function formatWorkflowResultText(input) {"
+        ],
+        [
+          "    const outputWarning = writeWorkflowAggregateOutput(input.aggregateOutputPath, fullText, input.producedChildOutputPaths);",
+          "    const outputWarning = await writeWorkflowAggregateOutput(input.aggregateOutputPath, fullText, input.producedChildOutputPaths);"
+        ],
+        [
+          "            saveWarning = writeWorkflowAggregateOutput(input.fullResultPath, fullText, new Set());",
+          "            saveWarning = await writeWorkflowAggregateOutput(input.fullResultPath, fullText, new Set());"
+        ],
+        [
+          "                        const outputWarning = writeWorkflowAggregateOutput(workflowAggregateOutputPath, summary, producedChildOutputPaths);",
+          "                        const outputWarning = await writeWorkflowAggregateOutput(workflowAggregateOutputPath, summary, producedChildOutputPaths);"
+        ],
+        [
+          "                        const outputWarning = writeWorkflowAggregateOutput(workflowAggregateOutputPath, terminalSummary, producedChildOutputPaths);",
+          "                        const outputWarning = await writeWorkflowAggregateOutput(workflowAggregateOutputPath, terminalSummary, producedChildOutputPaths);"
+        ],
+        [
+          "                const displayText = formatWorkflowResultText({\n                    head: [...(workflowPreflight ? [formatWorkflowPreflight(workflowPreflight)] : []), runningSummary ? `Workflow dispatch completed; ${runningSummary}` : \"Workflow completed.\"],",
+          "                const displayText = await formatWorkflowResultText({\n                    head: [...(workflowPreflight ? [formatWorkflowPreflight(workflowPreflight)] : []), runningSummary ? `Workflow dispatch completed; ${runningSummary}` : \"Workflow completed.\"],"
+        ],
+        [
+          "                const displayText = formatWorkflowResultText({",
+          "                const displayText = await formatWorkflowResultText({"
+        ]
+      ]
+    },
+    {
+      "path": "bundle/chunk-JG4QKI5M.js",
+      "before": "4163ac30dde1c638a5d7bf5ec1afe76f7e2e47e43f32076d7ca5ab8d86ef914e",
+      "after": "c59e611305ff27ca403139e67d94e95d9bb6e06767f72309e17fc43adfc20ba9",
+      "replacements": [
+        [
+          "function resolveSingleAgentLaunchTimeout(params, async, configDefaultTimeoutMs) {\n",
+          "function resolveSingleAgentLaunchTimeout(params, async, configDefaultTimeoutMs) {\n    // CoThink pi-subagents-0.84.0 foreground-unlimited-v1: never pass raw zero to deadline arithmetic.\n    if (params.timeoutMs === 0 && !async && params.agent && !params.chain?.length && !params.tasks?.length && params.workflowScript === void 0 && params.maxRuntimeMs === void 0) return {};\n"
+        ],
+        [
+          "function buildInProcessChildLaunch(input) {",
+          "function buildInProcessChildLaunch(input) {\n    verifyHostInput(input);"
+        ],
+        [
+          "  const session = {",
+          "  const session = {\n    ...(input.hostAdmission ? {hostAdmission: input.hostAdmission} : {}),"
+        ],
+        [
+          "import {\n  formatChildToolDiagnostic,\n  projectRuntimeAcknowledgedExtensions,\n  registerSubagentPromptBoundary,\n  regist",
+          "import { admitHostChild, verifyHostInput } from \"../src/runs/shared/host-integration.js\";\nimport {\n  formatChildToolDiagnostic,\n  projectRuntimeAcknowledgedExtensions,\n  registerSubagentPromptBoundary,\n  regist"
+        ],
+        [
+          "function buildInProcessChildLaunch(input) {",
+          "async function buildAdmittedChildLaunch(input) {\n    return buildInProcessChildLaunch(await admitHostChild(input));\n}\nfunction buildInProcessChildLaunch(input) {"
+        ],
+        [
+          "const launch = buildInProcessChildLaunch({",
+          "const launch = await buildAdmittedChildLaunch({"
+        ],
+        [
+          "async function runSyncCompletionInner(runtimeCwd, agents, agentName, task, options) {",
+          "async function runSyncCompletionInner(runtimeCwd, agents, agentName, task, options) {\n    const admittedOperation = await admitHostOperation({kind:\"foreground\", cwd:options.cwd ?? runtimeCwd, parentSessionId:options.parentSessionId, runId:options.runId, agent:agentName, task});\n    options = {...options, ...admittedOperation};"
+        ],
+        [
+          "import {\n  formatChildToolDiagnostic,\n  projectRuntimeAcknowledgedExtensions,\n  registerSubagentPromptBoundary,\n  regist",
+          "import { admitHostOperation } from \"../src/runs/shared/host-integration.js\";\nimport {\n  formatChildToolDiagnostic,\n  projectRuntimeAcknowledgedExtensions,\n  registerSubagentPromptBoundary,\n  regist"
+        ],
+        [
+          "...(input.hostAdmission ? {hostAdmission: input.hostAdmission} : {}),",
+          "...(input.hostAdmission ? {hostAdmission: input.hostAdmission, hostAgentDir:input.hostAgentDir, hostSettings:input.hostSettings} : {}),"
+        ],
+        [
+          "hooks: capturedHooks.hooks,",
+          "hooks: [...capturedHooks.hooks, ...(input.hostHooks ?? [])],"
+        ],
+        [
+          "const launch = await buildAdmittedChildLaunch({",
+          "const launch = await buildAdmittedChildLaunch({\n        nativeTask: shared.originalTask ?? task,"
+        ],
+        [
+          "const executeRequest = async (_id, params, signal, onUpdate, ctx, preserveActiveSession = false, parentModelOverride) => {",
+          "const executeRequest = async (_id, params, signal, onUpdate, ctx, preserveActiveSession = false, parentModelOverride) => {\n        const managedHostOperation = await admitHostOperation({kind:\"request\",cwd:ctx.cwd,parentSessionId:ctx.sessionManager.getSessionId(),nativeParams:params,toolCallId:_id});"
+        ],
+        [
+          "const timeout = requestParams.timeoutMs ?? requestParams.maxRuntimeMs ?? (requestParams.async === false ? resolveConfigDefaultTimeoutMs(deps2.config.timeoutMs) ?? DEFAULT_FOREGROUND_TIMEOUT_MS : void 0);",
+          "const timeout = requestParams.timeoutMs ?? requestParams.maxRuntimeMs ?? (managedHostOperation.hostManaged ? undefined : requestParams.async === false ? resolveConfigDefaultTimeoutMs(deps2.config.timeoutMs) ?? DEFAULT_FOREGROUND_TIMEOUT_MS : void 0);"
+        ],
+        [
+          "const foregroundTimeout = resolveSingleAgentLaunchTimeout(\n      effectiveParams,\n      effectiveAsync,\n      resolveConfigDefaultTimeoutMs(deps2.config.timeoutMs)\n    );",
+          "const foregroundTimeout = managedHostOperation.hostManaged && params.timeoutMs === undefined && params.maxRuntimeMs === undefined ? {} : resolveSingleAgentLaunchTimeout(\n      effectiveParams,\n      effectiveAsync,\n      resolveConfigDefaultTimeoutMs(deps2.config.timeoutMs)\n    );"
+        ],
+        [
+          "script: workflowScript,\n",
+          "script: workflowScript,\n                    managedNoRetry:managedHostOperation.hostManaged===true,\n"
+        ],
+        [
+          "script: requestParams.workflowScript,\n",
+          "script: requestParams.workflowScript,\n                    managedNoRetry:managedHostOperation.hostManaged===true,\n"
+        ],
+        [
+          "import {\n  formatChildToolDiagnostic,\n  projectRuntimeAcknowledgedExtensions,\n  registerSubagentPromptBoundary,\n  regist",
+          "import { bindHostResult, finishHostResult } from \"../src/runs/shared/host-integration.js\";\nimport {\n  formatChildToolDiagnostic,\n  projectRuntimeAcknowledgedExtensions,\n  registerSubagentPromptBoundary,\n  regist"
+        ],
+        [
+          "artifactOutputByResult.set(result2, fullOutput);",
+          "bindHostResult(result2,launch.session);\n    artifactOutputByResult.set(result2, fullOutput);"
+        ],
+        [
+          "  return result2;\n}\nasync function runSyncCompletion",
+          "    await finishHostResult(result2);\n  return result2;\n}\nasync function runSyncCompletion"
+        ],
+        [
+          "stopped: attemptResult.stopped ||",
+          "stopped: options.hostManaged || attemptResult.stopped ||"
+        ],
+        [
+          "const timeoutForTool = effectiveToolTimeoutMs(event.toolName, options.toolTimeoutMs);",
+          "if(options.hostManaged && options.toolTimeoutMs === undefined)return;\n            const timeoutForTool = effectiveToolTimeoutMs(event.toolName, options.toolTimeoutMs);"
+        ],
+        [
+          "const toolTimeout = resolveToolTimeoutMs({",
+          "const toolTimeout = options.hostManaged && options.toolTimeoutMs === undefined ? {} : resolveToolTimeoutMs({"
+        ],
+        [
+          "...toolPlan.explicitToolAllowlist ? { tools: toolPlan.effectiveToolAllowlist } : {},",
+          "...toolPlan.explicitToolAllowlist ? { tools: [...new Set([...toolPlan.effectiveToolAllowlist, ...(input.hostToolNames ?? [])])] } : {},"
+        ],
+        [
+          "}, options.context);\n  const startTime = Date.now();",
+          "}, options.context);\n  bindHostResult(result2,launch.session);\n    const startTime = Date.now();"
+        ],
+        [
+          "nativeTask: shared.originalTask ?? task,",
+          "nativeTask: shared.originalTask ?? task,\n        nativeAcceptance:options.acceptance,"
+        ],
+        [
+          "const selectedAgents = selectedAgentNames.map((name) => agents.find((agent) => agent.name === name));",
+          "const selectedAgents = selectedAgentNames.map((name) => agents.find((agent) => agent.name === name));\n        if(managedHostOperation.hostManaged && selectedAgents.some(agent=>agent?.runner || agent?.launcher || agent?.machine)) return buildRequestedModeError(effectiveParams,\"This managed native route supports local Pi SDK children only; external/placed runners require their own admitted adapter.\");"
+        ],
+        [
+          "contextPolicy.usesFork && deps2.config.forkContext?.mode === \"pruned\"",
+          "!managedHostOperation.hostManaged && contextPolicy.usesFork && deps2.config.forkContext?.mode === \"pruned\""
+        ],
+        [
+          "import {\n  formatChildToolDiagnostic,\n  projectRuntimeAcknowledgedExtensions,\n  registerSubagentPromptBoundary,\n  regist",
+          "import { withHostOperation } from \"../src/runs/shared/host-integration.js\";\nimport {\n  formatChildToolDiagnostic,\n  projectRuntimeAcknowledgedExtensions,\n  registerSubagentPromptBoundary,\n  regist"
+        ],
+        [
+          "const executeRequest = async (_id, params, signal, onUpdate, ctx, preserveActiveSession = false, parentModelOverride) => {",
+          "const executeRequest = (_id, params, signal, onUpdate, ctx, preserveActiveSession = false, parentModelOverride) => withHostOperation({kind:\"request\",cwd:ctx.cwd,parentSessionId:ctx.sessionManager.getSessionId(),nativeParams:params,toolCallId:_id}, admitted=>executeAdmittedRequest(_id,params,signal,onUpdate,ctx,preserveActiveSession,parentModelOverride,admitted));\n    const executeAdmittedRequest = async (_id, params, signal, onUpdate, ctx, preserveActiveSession = false, parentModelOverride, managedHostOperation = {}) => {"
+        ],
+        [
+          "        const managedHostOperation = await admitHostOperation({kind:\"request\",cwd:ctx.cwd,parentSessionId:ctx.sessionManager.getSessionId(),nativeParams:params,toolCallId:_id});",
+          ""
+        ],
+        [
+          "if (options.structuredOutput && !structuredOutputToolInvoked",
+          "if (!options.hostManaged && options.structuredOutput && !structuredOutputToolInvoked"
+        ],
+        [
+          "import {\n  formatChildToolDiagnostic,\n  projectRuntimeAcknowledgedExtensions,\n  registerSubagentPromptBoundary,\n  regist",
+          "import { validateHostOutput } from \"../src/runs/shared/host-integration.js\";\nimport {\n  formatChildToolDiagnostic,\n  projectRuntimeAcknowledgedExtensions,\n  registerSubagentPromptBoundary,\n  regist"
+        ],
+        [
+          "function writeWorkflowAggregateOutput(outputPath, text, producedChildOutputPaths) {",
+          "function writeWorkflowAggregateOutput(outputPath, text, producedChildOutputPaths) {\n    validateHostOutput(outputPath);"
+        ],
+        [
+          "kind:\"foreground\", cwd:options.cwd ?? runtimeCwd, parentSessionId:options.parentSessionId, runId:options.runId, agent:agentName, task",
+          "kind:\"foreground\", cwd:options.cwd ?? runtimeCwd, parentSessionId:options.parentSessionId, runId:options.runId, agent:agentName, task, outputPath:options.outputPath"
+        ],
+        [
+          "import { withHostOperation }",
+          "import { withHostOperation, hostOperationContext }"
+        ],
+        [
+          "admitted=>executeAdmittedRequest(_id,params,signal,onUpdate,ctx,preserveActiveSession,parentModelOverride,admitted)",
+          "admitted=>executeAdmittedRequest(_id,params,signal,onUpdate,hostOperationContext(ctx,admitted),preserveActiveSession,parentModelOverride,admitted)"
+        ],
+        [
+          "import { admitHostChild, verifyHostInput } from \"../src/runs/shared/host-integration.js\";\nimport { a",
+          "import { admitHostRunner, hostRunnerSpawned, hostAgentDirectory } from \"../src/runs/shared/host-integration.js\";\nimport { admitHostChild, verifyHostInput } from \"../src/runs/shared/host-integration.js\";\nimport { a"
+        ],
+        [
+          "function spawnRunner(cfg, suffix, cwd, initialStatus, initialStatusPath, launchParentSessionId, onProcessTerminal, onBeforeProceed, requestedCwd = cwd) {",
+          "async function spawnRunner(cfg, suffix, cwd, initialStatus, initialStatusPath, launchParentSessionId, onProcessTerminal, onBeforeProceed, requestedCwd = cwd) {\n    const hostRunnerInstance = randomUUID();\n    cfg = await admitHostRunner({...cfg,runnerProcessInstanceId:hostRunnerInstance},launchParentSessionId);"
+        ],
+        [
+          "const runnerProcessInstanceId = randomUUID2();",
+          "const runnerProcessInstanceId = hostRunnerInstance;"
+        ],
+        [
+          "let observedProcessExit;",
+          "hostRunnerSpawned(launchConfig,proc);\n        let observedProcessExit;"
+        ],
+        [
+          "timeoutMs: a.defaultTimeoutMs ?? DEFAULT_ASYNC_TIMEOUT_MS,",
+          "timeoutMs: hostAgentDirectory() ? undefined : a.defaultTimeoutMs ?? DEFAULT_ASYNC_TIMEOUT_MS,"
+        ],
+        [
+          "import { withHostOperation, hostOperationContext }",
+          "import { withHostOperation, hostOperationContext, admitHostResume }"
+        ],
+        [
+          "target = resolved;",
+          "target = await admitHostResume(resolved);"
+        ],
+        [
+          "import { admitHostRunner, hostRunnerSpawned, hostAgentDirectory }",
+          "import { admitHostRunner, hostRunnerSpawned, hostRunnerReady, hostAgentDirectory }"
+        ],
+        [
+          "if (typeof proc.pid !== \"number\") {",
+          "await hostRunnerReady(launchConfig);\n        if (typeof proc.pid !== \"number\") {"
+        ],
+        [
+          "import { bindHostResult, finishHostResult }",
+          "import { bindHostResult, finishHostResult, withHostSourceOutput }"
+        ],
+        [
+          "resolveSingleOutput(options.outputPath, structuredText ?? fullOutput, shared.outputSnapshot, options.outputClaimPath)",
+          "await withHostSourceOutput(options.outputPath,()=>resolveSingleOutput(options.outputPath, structuredText ?? fullOutput, shared.outputSnapshot, options.outputClaimPath))"
+        ],
+        [
+          "function writeWorkflowAggregateOutput(outputPath, text, producedChildOutputPaths) {",
+          "async function writeWorkflowAggregateOutput(outputPath, text, producedChildOutputPaths) {\n    return withHostSourceOutput(outputPath,()=>writeAdmittedWorkflowAggregateOutput(outputPath,text,producedChildOutputPaths));\n}\nfunction writeAdmittedWorkflowAggregateOutput(outputPath, text, producedChildOutputPaths) {"
+        ],
+        [
+          "function formatWorkflowResultText(input) {",
+          "async function formatWorkflowResultText(input) {"
+        ],
+        [
+          "  const outputWarning = writeWorkflowAggregateOutput(input.aggregateOutputPath, fullText, input.producedChildOutputPaths);",
+          "  const outputWarning = await writeWorkflowAggregateOutput(input.aggregateOutputPath, fullText, input.producedChildOutputPaths);"
+        ],
+        [
+          "    if (!aggregateHoldsFullText) saveWarning = writeWorkflowAggregateOutput(input.fullResultPath, fullText, /* @__PURE__ */ new Set());",
+          "    if (!aggregateHoldsFullText) saveWarning = await writeWorkflowAggregateOutput(input.fullResultPath, fullText, /* @__PURE__ */ new Set());"
+        ],
+        [
+          "            const outputWarning = writeWorkflowAggregateOutput(workflowAggregateOutputPath2, summary, producedChildOutputPaths2);",
+          "            const outputWarning = await writeWorkflowAggregateOutput(workflowAggregateOutputPath2, summary, producedChildOutputPaths2);"
+        ],
+        [
+          "            const outputWarning = writeWorkflowAggregateOutput(workflowAggregateOutputPath2, terminalSummary, producedChildOutputPaths2);",
+          "            const outputWarning = await writeWorkflowAggregateOutput(workflowAggregateOutputPath2, terminalSummary, producedChildOutputPaths2);"
+        ],
+        [
+          "        const displayText = formatWorkflowResultText({\n          head: [...workflowPreflight ? [formatWorkflowPreflight(workflowPreflight)] : [], runningSummary ? `Workflow dispatch completed; ${runningSummary}` : \"Workflow completed.\"],",
+          "        const displayText = await formatWorkflowResultText({\n          head: [...workflowPreflight ? [formatWorkflowPreflight(workflowPreflight)] : [], runningSummary ? `Workflow dispatch completed; ${runningSummary}` : \"Workflow completed.\"],"
+        ],
+        [
+          "        const displayText = formatWorkflowResultText({",
+          "        const displayText = await formatWorkflowResultText({"
+        ],
+        [
+          "const cwdError = preflightLaunchCwd(options.requestedCwd ?? effectiveCwd, effectiveCwd);",
+          "const cwdError = options.machine ? undefined : preflightLaunchCwd(options.requestedCwd ?? effectiveCwd, effectiveCwd);"
+        ]
+      ]
+    },
+    {
+      "path": "src/api/delegation.d.ts",
+      "before": "66bc1230efb2805da6b3e6e72b3635dc989d135bdeddc9e5a54075e1884fdbfe",
+      "after": "c0f2d9015fe761eedfa4c7845af1e2a0e37dd83d42741f5c5027e74c15b6f010",
+      "replacements": [
+        [
+          "    timeoutMs?: number;",
+          "    /** CoThink compatibility: explicit 0 disables the foreground single-child run deadline; omitted preserves upstream defaults. */\n    timeoutMs?: number;"
+        ]
+      ]
+    },
+    {
+      "path": "src/runs/shared/child-launch.js",
+      "before": "826492083481a56ebb5381bfbaddc3b0576e2046356218a8f3c9e563b456fab8",
+      "after": "535d998d516b47a881cb814db84dee93e8d04d1db852d04d51ca643fb826c467",
+      "replacements": [
+        [
+          "export function buildInProcessChildLaunch(input) {",
+          "export function buildInProcessChildLaunch(input) {\n    verifyHostInput(input);"
+        ],
+        [
+          "    const session = {",
+          "    const session = {\n    ...(input.hostAdmission ? {hostAdmission: input.hostAdmission} : {}),"
+        ],
+        [
+          "/**\n * Builds the in-process launch for one child: the tool plan, the typed child\n * runtime config the hooks read, and ",
+          "import { admitHostChild, verifyHostInput } from \"./host-integration.js\";\n/**\n * Builds the in-process launch for one child: the tool plan, the typed child\n * runtime config the hooks read, and "
+        ],
+        [
+          "export function buildInProcessChildLaunch(input) {",
+          "export async function buildAdmittedChildLaunch(input) {\n    return buildInProcessChildLaunch(await admitHostChild(input));\n}\nexport function buildInProcessChildLaunch(input) {"
+        ],
+        [
+          "...(input.hostAdmission ? {hostAdmission: input.hostAdmission} : {}),",
+          "...(input.hostAdmission ? {hostAdmission: input.hostAdmission, hostAgentDir:input.hostAgentDir, hostSettings:input.hostSettings} : {}),"
+        ],
+        [
+          "hooks: capturedHooks.hooks,",
+          "hooks: [...capturedHooks.hooks, ...(input.hostHooks ?? [])],"
+        ],
+        [
+          "...(toolPlan.explicitToolAllowlist ? { tools: toolPlan.effectiveToolAllowlist } : {}),",
+          "...(toolPlan.explicitToolAllowlist ? { tools: [...new Set([...toolPlan.effectiveToolAllowlist, ...(input.hostToolNames ?? [])])] } : {}),"
+        ]
+      ]
+    },
+    {
+      "path": "src/runs/foreground/execution.js",
+      "before": "8df32fe40f1c8a129348dad260333dd186849817a087939619a617c2115a212e",
+      "after": "09516bd40c993e93aadd1c4cf3859a85d2ea7df1293365dfdb10b65db4d89ef5",
+      "replacements": [
+        [
+          "import { buildInProcessChildLaunch, createReportedChildSessionInput }",
+          "import { buildAdmittedChildLaunch, createReportedChildSessionInput }"
+        ],
+        [
+          "const launch = buildInProcessChildLaunch({",
+          "const launch = await buildAdmittedChildLaunch({"
+        ],
+        [
+          "async function runSyncCompletionInner(runtimeCwd, agents, agentName, task, options) {",
+          "async function runSyncCompletionInner(runtimeCwd, agents, agentName, task, options) {\n    const admittedOperation = await admitHostOperation({kind:\"foreground\", cwd:options.cwd ?? runtimeCwd, parentSessionId:options.parentSessionId, runId:options.runId, agent:agentName, task});\n    options = {...options, ...admittedOperation};"
+        ],
+        [
+          "/**\n * Core execution logic for running subagents\n */\nimport { existsSync, mkdirSync, rmSync, writeFileSync } from \"node",
+          "import { admitHostOperation } from \"../shared/host-integration.js\";\n/**\n * Core execution logic for running subagents\n */\nimport { existsSync, mkdirSync, rmSync, writeFileSync } from \"node"
+        ],
+        [
+          "const launch = await buildAdmittedChildLaunch({",
+          "const launch = await buildAdmittedChildLaunch({\n        nativeTask: shared.originalTask ?? task,"
+        ],
+        [
+          "/**\n * Core execution logic for running subagents\n */\nimport { existsSync, mkdirSync, rmSync, writeFileSync } from \"node",
+          "import { bindHostResult, finishHostResult } from \"../shared/host-integration.js\";\n/**\n * Core execution logic for running subagents\n */\nimport { existsSync, mkdirSync, rmSync, writeFileSync } from \"node"
+        ],
+        [
+          "artifactOutputByResult.set(result, fullOutput);",
+          "bindHostResult(result,launch.session);\n    artifactOutputByResult.set(result, fullOutput);"
+        ],
+        [
+          "    return result;\n}\nasync function runSyncCompletion",
+          "    await finishHostResult(result);\n    return result;\n}\nasync function runSyncCompletion"
+        ],
+        [
+          "stopped: attemptResult.stopped ||",
+          "stopped: options.hostManaged || attemptResult.stopped ||"
+        ],
+        [
+          "const timeoutForTool = effectiveToolTimeoutMs(event.toolName, options.toolTimeoutMs);",
+          "if(options.hostManaged && options.toolTimeoutMs === undefined)return;\n            const timeoutForTool = effectiveToolTimeoutMs(event.toolName, options.toolTimeoutMs);"
+        ],
+        [
+          "const toolTimeout = resolveToolTimeoutMs({",
+          "const toolTimeout = options.hostManaged && options.toolTimeoutMs === undefined ? {} : resolveToolTimeoutMs({"
+        ],
+        [
+          "}, options.context);\n    const startTime = Date.now();",
+          "}, options.context);\n    bindHostResult(result,launch.session);\n    const startTime = Date.now();"
+        ],
+        [
+          "nativeTask: shared.originalTask ?? task,",
+          "nativeTask: shared.originalTask ?? task,\n        nativeAcceptance:options.acceptance,"
+        ],
+        [
+          "if (options.structuredOutput\n                    && !structuredOutputToolInvoked",
+          "if (!options.hostManaged && options.structuredOutput\n                    && !structuredOutputToolInvoked"
+        ],
+        [
+          "kind:\"foreground\", cwd:options.cwd ?? runtimeCwd, parentSessionId:options.parentSessionId, runId:options.runId, agent:agentName, task",
+          "kind:\"foreground\", cwd:options.cwd ?? runtimeCwd, parentSessionId:options.parentSessionId, runId:options.runId, agent:agentName, task, outputPath:options.outputPath"
+        ],
+        [
+          "import { bindHostResult, finishHostResult }",
+          "import { bindHostResult, finishHostResult, withHostSourceOutput }"
+        ],
+        [
+          "resolveSingleOutput(options.outputPath, structuredText ?? fullOutput, shared.outputSnapshot, options.outputClaimPath)",
+          "await withHostSourceOutput(options.outputPath,()=>resolveSingleOutput(options.outputPath, structuredText ?? fullOutput, shared.outputSnapshot, options.outputClaimPath))"
+        ],
+        [
+          "const cwdError = preflightLaunchCwd(options.requestedCwd ?? effectiveCwd, effectiveCwd);",
+          "const cwdError = options.machine ? undefined : preflightLaunchCwd(options.requestedCwd ?? effectiveCwd, effectiveCwd);"
+        ]
+      ]
+    },
+    {
+      "path": "src/runs/background/runner-child-launch.js",
+      "before": "6db832b760b7e27d1eddb9fd05cea582afa9316a7fa1b2bc7f0857ef1977c1c1",
+      "after": "b93945079856d625745d7ded696e1ca9372e25f3fb22eff92594fe18f97c7864",
+      "replacements": [
+        [
+          "import { buildInProcessChildLaunch }",
+          "import { buildAdmittedChildLaunch }"
+        ],
+        [
+          "export function buildRunnerChildLaunch(step, ctx, attempt) {",
+          "export async function buildRunnerChildLaunch(step, ctx, attempt) {"
+        ],
+        [
+          "return buildInProcessChildLaunch({",
+          "return buildAdmittedChildLaunch({"
+        ],
+        [
+          "return buildAdmittedChildLaunch({",
+          "return buildAdmittedChildLaunch({\n        nativeTask:step.task,"
+        ]
+      ]
+    },
+    {
+      "path": "src/runs/background/subagent-runner.js",
+      "before": "15ea91a474db303f218c886b999ac86d1bbc79310c3eaec8825de35dc4864751",
+      "after": "be658105067bf1b19bee63806a8cdea81c5f5a608ec7e5b814c25245a453c38d",
+      "replacements": [
+        [
+          "launch = buildRunnerChildLaunch(step, ctx, {",
+          "launch = await buildRunnerChildLaunch(step, ctx, {"
+        ],
+        [
+          "var __rewriteRelativeImportExtension = (this && this.__rewriteRelativeImportExtension) || function (",
+          "import { bindHostResult, finishHostResult, hostAgentDirectory } from \"../shared/host-integration.js\";\nvar __rewriteRelativeImportExtension = (this && this.__rewriteRelativeImportExtension) || function ("
+        ],
+        [
+          "    let stagedIndexBaseline;",
+          "    let stagedIndexBaseline;\n    let hostFinalLaunch;"
+        ],
+        [
+          "        const { warnings, capabilityAudit: attemptCapabilityAudit } = launch;",
+          "        hostFinalLaunch=launch;\n        const { warnings, capabilityAudit: attemptCapabilityAudit } = launch;"
+        ],
+        [
+          "        if (recovery.action === \"resume\") {",
+          "        if (!hostAgentDirectory() && recovery.action === \"resume\") {"
+        ],
+        [
+          "    return isAgentContract(step.agentContract) ? attachContractProjections(result) : result;",
+          "    if(hostFinalLaunch){bindHostResult(result,hostFinalLaunch.session);await finishHostResult(result);}\n    return isAgentContract(step.agentContract) ? attachContractProjections(result) : result;"
+        ],
+        [
+          "import { bindHostResult, finishHostResult, hostAgentDirectory }",
+          "import { bindHostResult, finishHostResult, hostAgentDirectory, withHostSourceOutput }"
+        ],
+        [
+          "resolveSingleOutput(step.outputPath, structuredText ?? replyOutput, finalOutputSnapshot, step.outputClaimPath)",
+          "await withHostSourceOutput(step.outputPath,()=>resolveSingleOutput(step.outputPath, structuredText ?? replyOutput, finalOutputSnapshot, step.outputClaimPath))"
+        ]
+      ]
+    },
+    {
+      "path": "src/runs/shared/child-session.js",
+      "before": "3959467d7b7e95120c039ddca6ee9a770661be7d2198e195b51b230c2c8632ca",
+      "after": "c9034b74872489ded1285b13b528608553c1a22ae8aa019bede4a3eb73fa5fc2",
+      "replacements": [
+        [
+          "var __rewriteRelativeImportExtension = (this && this.__rewriteRelativeImportExtension) || function (path, preserveJsx) {",
+          "import { claimHostChild, hostChildStarted, hostChildTerminal } from \"./host-integration.js\";\nvar __rewriteRelativeImportExtension = (this && this.__rewriteRelativeImportExtension) || function (path, preserveJsx) {"
+        ],
+        [
+          "async create(launch) {\n            const disposalsAtStart",
+          "async create(launch) {\n            await claimHostChild(launch);\n            const disposalsAtStart"
+        ],
+        [
+          "const session = await opened;",
+          "const session = await opened;\n            try { await hostChildStarted(launch, {sessionId: session.sessionId, sessionFile: session.sessionFile, model: session.model ? `${session.model.provider}/${session.model.id}` : null}); }\n            catch (error) { await shutdownSession(session); throw error; }"
+        ],
+        [
+          "const shutdownSession = async (session) => {\n                try {\n                    await commands?.shutdown();\n                    const runner = session.extensionRunner;\n                    if (runner.hasHandlers(\"session_shutdown\")) {\n                        // Ref'd so a detached runner with nothing else pending stays alive until the bound\n                        // ends and still publishes its result; cleared as soon as the handlers finish.\n                        let bound;\n                        await Promise.race([runner.emit({ type: \"session_shutdown\", reason: \"quit\" }), new Promise((resolve) => { bound = setTimeout(resolve, shutdownTimeoutMs); })])\n                            .finally(() => clearTimeout(bound));\n                    }\n                }\n                catch (error) {\n                    launch.onExtensionError?.({ extensionPath: \"<session>\", event: \"session_shutdown\", error });\n                }\n                finally {\n                    session.dispose();\n                }\n            };\n            ",
+          "const shutdownFailuresBySession = new WeakMap();\n            const shutdownSession = async (session) => {\n                const errors = [];\n                shutdownFailuresBySession.set(session, errors);\n                let timedOut = false, disposed = false;\n                try { await commands?.shutdown(); } catch (error) { errors.push(error); }\n                try {\n                    const runner = session.extensionRunner;\n                    if (runner.hasHandlers(\"session_shutdown\")) {\n                        let bound;\n                        const handlers = Promise.resolve().then(() => runner.emit({type:\"session_shutdown\", reason:\"quit\"}));\n                        await Promise.race([handlers, new Promise(resolve => { bound = setTimeout(() => { timedOut = true; resolve(); }, shutdownTimeoutMs); })]).finally(() => clearTimeout(bound));\n                    }\n                } catch (error) { errors.push(error); }\n                try { await session.dispose(); disposed = true; } catch (error) { errors.push(error); }\n                for (const error of [...errors]) { try { launch.onExtensionError?.({extensionPath:\"<session>\",event:\"session_shutdown\",error}); } catch (reportError) { errors.push(reportError); } }\n                await hostChildTerminal(launch, {sessionId:session.sessionId, disposed, shutdownCompleted:!timedOut && errors.length===0, timedOut, errors:errors.map(error=>String(error?.message??error))});\n            };\n            "
+        ],
+        [
+          "onError: (error) => {\n                            if (binding",
+          "onError: (error) => {\n                            if(error.event === \"session_shutdown\") shutdownFailuresBySession.get(session)?.push(error.error);\n                            if (binding"
+        ],
+        [
+          "async create(launch) { return launch.machine ? (await factory()).create(launch) : local.create(launch); }",
+          "async create(launch) { if(launch.machine) await claimHostChild(launch); return launch.machine ? (await factory()).create(launch) : local.create(launch); }"
+        ],
+        [
+          "const agentDir = getAgentDir();",
+          "const agentDir = launch.hostAgentDir ?? getAgentDir();"
+        ],
+        [
+          "const modelRuntime = launch.parentProviderRegistry",
+          "const modelRuntime = launch.hostAgentDir ? await pi.ModelRuntime.create({authPath:path.join(launch.hostAgentDir,\"auth.json\"),modelsPath:path.join(launch.hostAgentDir,\"models.json\"),allowModelNetwork:false}) : launch.parentProviderRegistry"
+        ],
+        [
+          "const settingsManager = pi.SettingsManager.create(launch.cwd, agentDir, { projectTrusted: launch.projectTrusted });",
+          "const settingsManager = launch.hostSettings ? pi.SettingsManager.inMemory(launch.hostSettings) : pi.SettingsManager.create(launch.cwd, agentDir, { projectTrusted: launch.projectTrusted });\n            if(launch.hostSettings) settingsManager.setProjectTrusted(false);"
+        ],
+        [
+          "const restoreEnv = applyProcessEnv(launch.processEnv);",
+          "const restoreEnv = launch.hostAdmission ? () => {} : applyProcessEnv(launch.processEnv);"
+        ],
+        [
+          "const session = await opened;\n            try { await hostChildStarted(launch, {sessionId: session.sessionId, sessionFile: session.sessionFile, model: session.model ? `${session.model.provider}/${session.model.id}` : null}); }\n            catch (error) { await shutdownSession(session); throw error; }",
+          "const session = await opened;"
+        ],
+        [
+          "pinChildCacheRetention(session.agent);",
+          "try { await hostChildStarted(launch, {sessionId:session.sessionId, sessionFile:session.sessionFile, model:session.model ? `${session.model.provider}/${session.model.id}` : null, api:session.model?.api,baseUrl:session.model?.baseUrl,thinking:session.thinkingLevel,control:{abort:()=>session.abort()}}); }\n                catch (error) { await shutdownSession(session); throw error; }\n                pinChildCacheRetention(session.agent);"
+        ],
+        [
+          "const commands = launch.runtime.runId",
+          "const commands = !launch.hostAdmission && launch.runtime.runId"
+        ],
+        [
+          "void shutdownDone.finally(() => shutdowns.delete(shutdownDone));",
+          "void shutdownDone.then(() => shutdowns.delete(shutdownDone), () => shutdowns.delete(shutdownDone));"
+        ]
+      ]
+    },
+    {
+      "path": "bundle/chunk-DZDETGRJ.js",
+      "before": "57037d10385c0a9c1462b74ad940bed50c332e6e06666611d981ccaa9d586aaa",
+      "after": "d716a6c075ec6a763b20102fb4a46b610fa59d9cfb818fe1c275f049536c8c54",
+      "replacements": [
+        [
+          "import {\n  MainWatchdogRuntime,\n  SUBAGENT_OPTION_KEYS,\n  SubagentOptionParams,\n  createMainWatchdogReview,\n  createSuba",
+          "import { claimHostChild, hostChildStarted, hostChildTerminal } from \"../src/runs/shared/host-integration.js\";\nimport {\n  MainWatchdogRuntime,\n  SUBAGENT_OPTION_KEYS,\n  SubagentOptionParams,\n  createMainWatchdogReview,\n  createSuba"
+        ],
+        [
+          "async create(launch) {\n      const disposalsAtStart",
+          "async create(launch) {\n      await claimHostChild(launch);\n            const disposalsAtStart"
+        ],
+        [
+          "const session = await opened;",
+          "const session = await opened;\n            try { await hostChildStarted(launch, {sessionId: session.sessionId, sessionFile: session.sessionFile, model: session.model ? `${session.model.provider}/${session.model.id}` : null}); }\n            catch (error) { await shutdownSession(session); throw error; }"
+        ],
+        [
+          "const shutdownSession = async (session2) => {\n        try {\n          await commands?.shutdown();\n          const runner = session2.extensionRunner;\n          if (runner.hasHandlers(\"session_shutdown\")) {\n            let bound;\n            await Promise.race([runner.emit({ type: \"session_shutdown\", reason: \"quit\" }), new Promise((resolve4) => {\n              bound = setTimeout(resolve4, shutdownTimeoutMs);\n            })]).finally(() => clearTimeout(bound));\n          }\n        } catch (error2) {\n          launch.onExtensionError?.({ extensionPath: \"<session>\", event: \"session_shutdown\", error: error2 });\n        } finally {\n          session2.dispose();\n        }\n      };\n      ",
+          "const shutdownFailuresBySession = new WeakMap();\n            const shutdownSession = async (session) => {\n                const errors = [];\n                shutdownFailuresBySession.set(session, errors);\n                let timedOut = false, disposed = false;\n                try { await commands?.shutdown(); } catch (error) { errors.push(error); }\n                try {\n                    const runner = session.extensionRunner;\n                    if (runner.hasHandlers(\"session_shutdown\")) {\n                        let bound;\n                        const handlers = Promise.resolve().then(() => runner.emit({type:\"session_shutdown\", reason:\"quit\"}));\n                        await Promise.race([handlers, new Promise(resolve => { bound = setTimeout(() => { timedOut = true; resolve(); }, shutdownTimeoutMs); })]).finally(() => clearTimeout(bound));\n                    }\n                } catch (error) { errors.push(error); }\n                try { await session.dispose(); disposed = true; } catch (error) { errors.push(error); }\n                for (const error of [...errors]) { try { launch.onExtensionError?.({extensionPath:\"<session>\",event:\"session_shutdown\",error}); } catch (reportError) { errors.push(reportError); } }\n                await hostChildTerminal(launch, {sessionId:session.sessionId, disposed, shutdownCompleted:!timedOut && errors.length===0, timedOut, errors:errors.map(error=>String(error?.message??error))});\n            };\n            "
+        ],
+        [
+          "onError: (error2) => {\n              if (binding",
+          "onError: (error2) => {\n              if(error2.event === \"session_shutdown\") shutdownFailuresBySession.get(session2)?.push(error2.error);\n              if (binding"
+        ],
+        [
+          "async create(launch) {\n      return launch.machine ? (await factory()).create(launch) : local.create(launch);",
+          "async create(launch) {\n      if(launch.machine) await claimHostChild(launch);\n      return launch.machine ? (await factory()).create(launch) : local.create(launch);"
+        ],
+        [
+          "const agentDir = getAgentDir();",
+          "const agentDir = launch.hostAgentDir ?? getAgentDir();"
+        ],
+        [
+          "const modelRuntime = launch.parentProviderRegistry ?",
+          "const modelRuntime = launch.hostAgentDir ? await pi.ModelRuntime.create({authPath:path13.join(launch.hostAgentDir,\"auth.json\"),modelsPath:path13.join(launch.hostAgentDir,\"models.json\"),allowModelNetwork:false}) : launch.parentProviderRegistry ?"
+        ],
+        [
+          "const settingsManager = pi.SettingsManager.create(launch.cwd, agentDir, { projectTrusted: launch.projectTrusted });",
+          "const settingsManager = launch.hostSettings ? pi.SettingsManager.inMemory(launch.hostSettings) : pi.SettingsManager.create(launch.cwd, agentDir, { projectTrusted: launch.projectTrusted });\n            if(launch.hostSettings) settingsManager.setProjectTrusted(false);"
+        ],
+        [
+          "const restoreEnv = applyProcessEnv(launch.processEnv);",
+          "const restoreEnv = launch.hostAdmission ? () => {} : applyProcessEnv(launch.processEnv);"
+        ],
+        [
+          "const session = await opened;\n            try { await hostChildStarted(launch, {sessionId: session.sessionId, sessionFile: session.sessionFile, model: session.model ? `${session.model.provider}/${session.model.id}` : null}); }\n            catch (error) { await shutdownSession(session); throw error; }",
+          "const session = await opened;"
+        ],
+        [
+          "pinChildCacheRetention(session2.agent);",
+          "try { await hostChildStarted(launch, {sessionId:session2.sessionId, sessionFile:session2.sessionFile, model:session2.model ? `${session2.model.provider}/${session2.model.id}` : null, api:session2.model?.api,baseUrl:session2.model?.baseUrl,thinking:session2.thinkingLevel,control:{abort:()=>session2.abort()}}); }\n                catch (error) { await shutdownSession(session2); throw error; }\n                pinChildCacheRetention(session2.agent);"
+        ],
+        [
+          "const commands = launch.runtime.runId",
+          "const commands = !launch.hostAdmission && launch.runtime.runId"
+        ],
+        [
+          "void shutdownDone.finally(() => shutdowns.delete(shutdownDone));",
+          "void shutdownDone.then(() => shutdowns.delete(shutdownDone), () => shutdowns.delete(shutdownDone));"
+        ]
+      ]
+    },
+    {
+      "path": "package.json",
+      "before": "4b21949cde90593cebdfed55c760707be7c54da092ec93a5cdfc8357325c8304",
+      "after": "2180358ea9e5f2631f054195faf3f9f1bebb22b7a3500094f0ece481c4a41def",
+      "replacements": [
+        [
+          "  \"exports\": {",
+          "  \"exports\": {\n    \"./host-integration\": {\"types\":\"./src/api/host-integration.d.ts\",\"default\":\"./src/runs/shared/host-integration.js\"},"
+        ]
+      ]
+    },
+    {
+      "path": "src/runs/shared/host-integration.js",
+      "before": null,
+      "after": "22bea779e1eda66dbd075553f0c0994a8f0d8d9df14027da49c3251bc6e3153e",
+      "source": "pi-subagents-host-integration.js"
+    },
+    {
+      "path": "src/api/host-integration.d.ts",
+      "before": null,
+      "after": "ef7c42ae7a4ad2f9de3fe5d3cae2d8faa61f3cf0eeeceae1bda6823ebee71dec",
+      "source": "pi-subagents-host-integration.d.ts"
+    },
+    {
+      "path": "src/runs/shared/child-launch.d.ts",
+      "before": "bfcd5d21784e1e9ffa0fa389efedf889f11789b9a0e6bb088f0f9a02164cd98b",
+      "after": "1f7f276c22331e33871a80a0c87df4e7e0b8f9ee1efb3cbdd1b526668b4e70b7",
+      "replacements": [
+        [
+          "export declare function buildInProcessChildLaunch(input: BuildInProcessChildLaunchInput): InProcessChildLaunch;",
+          "export declare function buildAdmittedChildLaunch(input: BuildInProcessChildLaunchInput): Promise<InProcessChildLaunch>;\nexport declare function buildInProcessChildLaunch(input: BuildInProcessChildLaunchInput): InProcessChildLaunch;"
+        ],
+        [
+          "export interface BuildInProcessChildLaunchInput {",
+          "export interface BuildInProcessChildLaunchInput {\n    nativeTask?:string;\n    hostAdmission?:object;\n    hostAgentDir?:string;\n    hostSettings?:Record<string,unknown>;\n    hostHooks?:ChildSessionLaunch[\"hooks\"];"
+        ],
+        [
+          "    hostHooks?:ChildSessionLaunch[\"hooks\"];",
+          "    hostHooks?:ChildSessionLaunch[\"hooks\"];\n    hostToolNames?:string[];"
+        ]
+      ]
+    },
+    {
+      "path": "src/runs/background/runner-child-launch.d.ts",
+      "before": "8ed48fef1a18de6d17f1fcec10558cab27d1785382f35793a8368539dea5fd30",
+      "after": "402b212687ca859b11f1530806be0da0c98a424fab089b426d85122f63b8e97f",
+      "replacements": [
+        [
+          "): import(\"../shared/child-launch.ts\").InProcessChildLaunch;",
+          "): Promise<import(\"../shared/child-launch.ts\").InProcessChildLaunch>;"
+        ]
+      ]
+    },
+    {
+      "path": "src/workflows/scripted-workflow.js",
+      "before": "49136f9ffb1dc54d1a1d2e1764f6960a52b078ad041cf2ace3dd19cc07a0ec87",
+      "after": "a95e71cf4e03426f1c06307fc8ded4a5f2426a811cd1bab61fe434432282cffd",
+      "replacements": [
+        [
+          "const autoResumeParams = setupAbortResumeParams(params, result, childSignal);",
+          "const autoResumeParams = options.managedNoRetry ? undefined : setupAbortResumeParams(params, result, childSignal);"
+        ]
+      ]
+    },
+    {
+      "path": "bundle/chunk-CGN2TVE7.js",
+      "before": "43636249549ad927668a6f1b984dfce88710b5297436e51c3cfd6d083adeeb81",
+      "after": "e606b748a1c3ddf50e22398a0bb967dc1dd456906dada3bb1d077d168f7178ca",
+      "replacements": [
+        [
+          "const autoResumeParams = setupAbortResumeParams(params, result, childSignal);",
+          "const autoResumeParams = options.managedNoRetry ? undefined : setupAbortResumeParams(params, result, childSignal);"
+        ],
+        [
+          "import {\n  PROJECT_SUBAGENTS_RELATIVE_DIR\n} from \"./chunk-D3JAFGMO.js\";\nimport {\n  DEFAULT_FILE_SYSTEM_RETRY_DELAYS_MS,\n",
+          "import { executeHostCommand } from \"../src/runs/shared/host-integration.js\";\nimport {\n  PROJECT_SUBAGENTS_RELATIVE_DIR\n} from \"./chunk-D3JAFGMO.js\";\nimport {\n  DEFAULT_FILE_SYSTEM_RETRY_DELAYS_MS,\n"
+        ],
+        [
+          "async function executeWorkflowHostCommand(input) {",
+          "async function executeWorkflowHostCommand(input) {\n    const hosted=await executeHostCommand(input);\n    if(hosted!==undefined)return hosted;"
+        ]
+      ]
+    },
+    {
+      "path": "src/workflows/host-command.js",
+      "before": "7fab3775b691f136412cb312daa916eef271149e5909d61587c7d44b6d2933de",
+      "after": "a81d6e7e68f234fda82f63abd0e4d732c3513dae0da39b1104b48a0f305e481b",
+      "replacements": [
+        [
+          "import { spawn } from \"node:child_process\";\nimport { randomUUID } from \"node:crypto\";\nimport * as fs from \"node:fs\";\nimp",
+          "import { executeHostCommand } from \"../runs/shared/host-integration.js\";\nimport { spawn } from \"node:child_process\";\nimport { randomUUID } from \"node:crypto\";\nimport * as fs from \"node:fs\";\nimp"
+        ],
+        [
+          "async function executeWorkflowHostCommand(input) {",
+          "async function executeWorkflowHostCommand(input) {\n    const hosted=await executeHostCommand(input);\n    if(hosted!==undefined)return hosted;"
+        ]
+      ]
+    },
+    {
+      "path": "src/runs/shared/child-session.d.ts",
+      "before": "17d9542c0a6969e7d2c6a0fcea1905f7b7b518330c9175f556306bfb6251a35f",
+      "after": "2f8c289d5569b1f0f1380c5042765e1b96d269f0d6d15dc5b1d407da260d6034",
+      "replacements": [
+        [
+          "export interface ChildSessionLaunch {",
+          "export interface ChildSessionLaunch {\n    hostAdmission?:object;\n    hostAgentDir?:string;\n    hostSettings?:Record<string,unknown>;"
+        ]
+      ]
+    },
+    {
+      "path": "src/workflows/scripted-workflow.d.ts",
+      "before": "7c088937e0cce416546ebcfe5f96cc3963d4092243c6f50bb7d692c4b5a15894",
+      "after": "8cdd0c22bed2bf613d7ffafe8dfbe6a80dec99b15cc64b0be729196eabc6d550",
+      "replacements": [
+        [
+          "export interface RunWorkflowScriptOptions {",
+          "export interface RunWorkflowScriptOptions {\n    /** CoThink managed tasks never replay a child after abort/compaction. */\n    managedNoRetry?:boolean;"
+        ]
+      ]
+    },
+    {
+      "path": "src/shared/utils.js",
+      "before": "418d828632d39a9540bae9f13e2f3554104c5392a22edf6c495c506e78c66a8e",
+      "after": "ab50f1609d44c7633338012ae77f2f1c00f036bf5cdb24cd7de2c7d5395bb4b8",
+      "replacements": [
+        [
+          "import * as fs from \"node:fs\";\nimport * as os from \"node:os\";\nimport * as path from \"node:path\";\nimport { previewDisplay",
+          "import { hostAgentDirectory } from \"../runs/shared/host-integration.js\";\nimport * as fs from \"node:fs\";\nimport * as os from \"node:os\";\nimport * as path from \"node:path\";\nimport { previewDisplay"
+        ],
+        [
+          "const configured = process.env.PI_CODING_AGENT_DIR;",
+          "const configured = hostAgentDirectory() ?? process.env.PI_CODING_AGENT_DIR;"
+        ]
+      ]
+    },
+    {
+      "path": "bundle/chunk-LNRJCP2Y.js",
+      "before": "e499075aacdd414554e2051bb99adf942b96aeac384dcf9ef1a18466e516b1df",
+      "after": "3ee9950925a65923d46f617be90171a9028b29a419db056353fb8372b31dc19d",
+      "replacements": [
+        [
+          "import {\n  CHAIN_RUNS_DIR,\n  RUNNER_LAUNCHER_NAME_PATTERN,\n  RUNNER_LAUNCHER_NAME_RULE\n} from \"./chunk-JEZOSEWG.js\";\nimp",
+          "import { hostAgentDirectory } from \"../src/runs/shared/host-integration.js\";\nimport {\n  CHAIN_RUNS_DIR,\n  RUNNER_LAUNCHER_NAME_PATTERN,\n  RUNNER_LAUNCHER_NAME_RULE\n} from \"./chunk-JEZOSEWG.js\";\nimp"
+        ],
+        [
+          "const configured = process.env.PI_CODING_AGENT_DIR;",
+          "const configured = hostAgentDirectory() ?? process.env.PI_CODING_AGENT_DIR;"
+        ],
+        [
+          "import {\n  CHAIN_RUNS_DIR,\n  RUNNER_LAUNCHER_NAME_PATTERN,\n  RUNNER_LAUNCHER_NAME_RULE\n} from \"./chunk-JEZOSEWG.js\";\nimp",
+          "import { validateHostOutput } from \"../src/runs/shared/host-integration.js\";\nimport {\n  CHAIN_RUNS_DIR,\n  RUNNER_LAUNCHER_NAME_PATTERN,\n  RUNNER_LAUNCHER_NAME_RULE\n} from \"./chunk-JEZOSEWG.js\";\nimp"
+        ],
+        [
+          "function resolveSingleOutput(outputPath, fallbackOutput, beforeRun, expectedClaimPath) {",
+          "function resolveSingleOutput(outputPath, fallbackOutput, beforeRun, expectedClaimPath) {\n    validateHostOutput(outputPath);"
+        ]
+      ]
+    },
+    {
+      "path": "src/extension/index.js",
+      "before": "a3e37fb002288f90c9ae13390f4f1de3be7ab4de552a6ace7099c8aaace076a3",
+      "after": "cfee0bf781eb4f4a2f469d9438759ee3c7ff601eaf95e6e45fb14dbb8c9576f4",
+      "replacements": [
+        [
+          "/**\n * Subagent Tool\n *\n * Full-featured subagent with sync and async modes.\n * - Sync (default): Streams output, render",
+          "import { hostAgentDirectory } from \"../runs/shared/host-integration.js\";\n/**\n * Subagent Tool\n *\n * Full-featured subagent with sync and async modes.\n * - Sync (default): Streams output, render"
+        ],
+        [
+          "if (recovering && ctx.hasUI && config.autoResume !== false) {",
+          "if (recovering && ctx.hasUI && config.autoResume !== false && !hostAgentDirectory()) {"
+        ],
+        [
+          "/**\n * Subagent Tool\n *\n * Full-featured subagent with sync and async modes.\n * - Sync (default): Streams output, render",
+          "import { headlessHostUI } from \"../runs/shared/host-integration.js\";\n/**\n * Subagent Tool\n *\n * Full-featured subagent with sync and async modes.\n * - Sync (default): Streams output, render"
+        ],
+        [
+          "const fleetStatus = fleetViewEnabled",
+          "const fleetStatus = fleetViewEnabled && !headlessHostUI()"
+        ],
+        [
+          "/**\n * Subagent Tool\n *\n * Full-featured subagent with sync and async modes.\n * - Sync (default): Streams output, render",
+          "import { headlessHostAPI } from \"../runs/shared/host-integration.js\";\n/**\n * Subagent Tool\n *\n * Full-featured subagent with sync and async modes.\n * - Sync (default): Streams output, render"
+        ],
+        [
+          "function registerSubagentExtension(pi) {",
+          "function registerSubagentExtension(pi) {\n    pi=headlessHostAPI(pi);"
+        ]
+      ]
+    },
+    {
+      "path": "src/runs/shared/single-output.js",
+      "before": "14edc76210571b8dbd46985b81252c5144b409f177946fdb2e8e5551fac4f84f",
+      "after": "13d0c9de306d785012b43fbc144834c1abee97577bc030ee57528b9c7bead6e7",
+      "replacements": [
+        [
+          "import * as fs from \"node:fs\";\nimport * as path from \"node:path\";\nconst READ_ONLY_OUTPUT_TOOLS = new Set([\n    \"read\", \"",
+          "import { validateHostOutput } from \"./host-integration.js\";\nimport * as fs from \"node:fs\";\nimport * as path from \"node:path\";\nconst READ_ONLY_OUTPUT_TOOLS = new Set([\n    \"read\", \""
+        ],
+        [
+          "function resolveSingleOutput(outputPath, fallbackOutput, beforeRun, expectedClaimPath) {",
+          "function resolveSingleOutput(outputPath, fallbackOutput, beforeRun, expectedClaimPath) {\n    validateHostOutput(outputPath);"
+        ]
+      ]
+    },
+    {
+      "path": "src/runs/background/async-execution.js",
+      "before": "0422238be44531573560656ad4896c11d927cfd1158f962a648edf4f5a2380a4",
+      "replacements": [
+        [
+          "/**\n * Async execution logic for subagent tool\n */\nimport { spawn } from \"node:child_process\";\nimpor",
+          "import { admitHostRunner, hostRunnerSpawned, hostAgentDirectory } from \"../shared/host-integration.js\";\n/**\n * Async execution logic for subagent tool\n */\nimport { spawn } from \"node:child_process\";\nimpor"
+        ],
+        [
+          "function spawnRunner(cfg, suffix, cwd, initialStatus, initialStatusPath, launchParentSessionId, onProcessTerminal, onBeforeProceed, requestedCwd = cwd) {",
+          "async function spawnRunner(cfg, suffix, cwd, initialStatus, initialStatusPath, launchParentSessionId, onProcessTerminal, onBeforeProceed, requestedCwd = cwd) {\n    const hostRunnerInstance = randomUUID();\n    cfg = await admitHostRunner({...cfg,runnerProcessInstanceId:hostRunnerInstance},launchParentSessionId);"
+        ],
+        [
+          "const runnerProcessInstanceId = randomUUID();",
+          "const runnerProcessInstanceId = hostRunnerInstance;"
+        ],
+        [
+          "let observedProcessExit;",
+          "hostRunnerSpawned(launchConfig,proc);\n        let observedProcessExit;"
+        ],
+        [
+          "timeoutMs: a.defaultTimeoutMs ?? DEFAULT_ASYNC_TIMEOUT_MS,",
+          "timeoutMs: hostAgentDirectory() ? undefined : a.defaultTimeoutMs ?? DEFAULT_ASYNC_TIMEOUT_MS,"
+        ],
+        [
+          "import { admitHostRunner, hostRunnerSpawned, hostAgentDirectory }",
+          "import { admitHostRunner, hostRunnerSpawned, hostRunnerReady, hostAgentDirectory }"
+        ],
+        [
+          "if (typeof proc.pid !== \"number\") {",
+          "await hostRunnerReady(launchConfig);\n        if (typeof proc.pid !== \"number\") {"
+        ]
+      ],
+      "after": "1ca0d85c439f49f7b4ffc512fc3a244ca6606e4ceb3ccfc19f4bc7e61812b599"
+    },
+    {
+      "path": "src/runs/background/subagent-runner-bootstrap.js",
+      "before": "2bdbf9b73b81a5c85c68394905641a53ad079322e01e63f2e967497d9cb9e754",
+      "replacements": [
+        [
+          "    validateSubagentRunConfig(rawConfig);",
+          "    validateSubagentRunConfig(rawConfig);\n    const hostBridge=rawConfig.hostBridge?await (await import(pathToFileURL(rawConfig.hostBridge.module))).connectRunner(rawConfig):undefined;"
+        ],
+        [
+          "        await execution.runConfiguredSubagentExecution(config, executionOptions);",
+          "        if(hostBridge)await hostBridge.run(()=>execution.runConfiguredSubagentExecution(config, executionOptions));\n        else await execution.runConfiguredSubagentExecution(config, executionOptions);\n        if(hostBridge)await hostBridge.finish();"
+        ],
+        [
+          "                fs.unlinkSync(configArg);",
+          "                if(!config.hostBridge)fs.unlinkSync(configArg);"
+        ]
+      ],
+      "after": "0ef211d8126e07525c8a77735522a983e3865383345aa73fbb6c902a8a810a0a"
+    },
+    {
+      "path": "src/runs/background/run-child-session.js",
+      "before": "2631fb468d59150434e1bcb149d4317fdef2c162f0f9d65a05ac05f06435801f",
+      "replacements": [
+        [
+          "import { SUBAGENT_STOPPED_MESSAGE, SUBAGENT_TIMED_OUT_MESSAGE, assistantMessageError, extractTextFro",
+          "import { hostAgentDirectory } from \"../shared/host-integration.js\";\nimport { SUBAGENT_STOPPED_MESSAGE, SUBAGENT_TIMED_OUT_MESSAGE, assistantMessageError, extractTextFro"
+        ],
+        [
+          "if (input.launch.session.runtime.structuredOutput",
+          "if (!hostAgentDirectory() && input.launch.session.runtime.structuredOutput"
+        ]
+      ],
+      "after": "00445fbe216511a0a96fb2d5a5ca6b6fe148a035da4024bd972bddc4ecded156"
+    },
+    {
+      "path": "src/runs/shared/herdr-machine.js",
+      "before": "e18c214a1148cba865874132ab183d0febdaa6b020e83c5f2946707db0aba4cd",
+      "after": "43fae643a82fbc5a8f5549bcff49d25f934855348b6a1c464d8a39ba5b86ae2d",
+      "replacements": [
+        [
+          "import { spawnSync } from \"node:child_process\";\nimport * as fs from \"node:fs\";\nimport * as path from",
+          "import {resolveHostMachinePlacement,hostMachineConnection} from \"./host-integration.js\";\nimport { spawnSync } from \"node:child_process\";\nimport * as fs from \"node:fs\";\nimport * as path from"
+        ],
+        [
+          "export function resolveMachinePlacement(input) {",
+          "export function resolveMachinePlacement(input) {\n    const admitted=resolveHostMachinePlacement(input);if(admitted)return admitted;"
+        ]
+      ]
+    },
+    {
+      "path": "bundle/chunk-2D52JFLF.js",
+      "before": "7068f3c1feed32eb3b87f666567ba59799340ce5f0f659fea6c95b49443adab2",
+      "after": "7b9f05471eee0970dc71a196b66850496c8048e5cbbb2c9aa0cc3511f949bf25",
+      "replacements": [
+        [
+          "import {\n  CODE_OWNED_EXTERNAL_CLI_ADAPTER_IDS,\n  getAgentDir,\n  getProjectConfigDir\n} from \"./chunk",
+          "import {resolveHostMachinePlacement,hostMachineConnection} from \"../src/runs/shared/host-integration.js\";\nimport {\n  CODE_OWNED_EXTERNAL_CLI_ADAPTER_IDS,\n  getAgentDir,\n  getProjectConfigDir\n} from \"./chunk"
+        ],
+        [
+          "function resolveMachinePlacement(input) {",
+          "function resolveMachinePlacement(input) {\n    const admitted=resolveHostMachinePlacement(input);if(admitted)return admitted;"
+        ],
+        [
+          "function herdrSshArgs(source = process.env) {",
+          "function herdrSshArgs(source = process.env, sshConfig) {\n    if(sshConfig!==undefined&&(typeof sshConfig!==\"string\"||!path.isAbsolute(sshConfig)||/[\\0\\r\\n]/.test(sshConfig)))throw new Error(\"Invalid explicit SSH configuration\");"
+        ],
+        [
+          "return [...HERDR_SSH_BASE,",
+          "return [...(sshConfig?[\"-F\",sshConfig]:[]),...HERDR_SSH_BASE,"
+        ],
+        [
+          "  return spawnSync2(options.sshBin ?? \"ssh\", [...herdrSshArgs(options.env), machine.target, command], { encoding: \"utf8\", env: hardenedSshEnv(options.env), timeout: options.timeout ?? 15e3, maxBuffer: options.maxBuffer ?? MAX_DISCOVERY_BYTES, windowsHide: true });",
+          "  return spawnSync2(options.sshBin ?? \"ssh\", [...herdrSshArgs(options.env, options.sshConfig ?? hostMachineConnection(machine).sshConfig), machine.target, command], { encoding: \"utf8\", env: hardenedSshEnv(options.env), timeout: options.timeout ?? 15e3, maxBuffer: options.maxBuffer ?? MAX_DISCOVERY_BYTES, windowsHide: true });"
+        ],
+        [
+          "  return runBoundedCommand(options.sshBin ?? \"ssh\", [...herdrSshArgs(options.env), machine.target, command], { env: hardenedSshEnv(options.env), timeout: options.timeout, maxBuffer: options.maxBuffer });",
+          "  return runBoundedCommand(options.sshBin ?? \"ssh\", [...herdrSshArgs(options.env, options.sshConfig ?? hostMachineConnection(machine).sshConfig), machine.target, command], { env: hardenedSshEnv(options.env), timeout: options.timeout, maxBuffer: options.maxBuffer });"
+        ],
+        [
+          "    const child = spawn(options.sshBin ?? \"ssh\", [...herdrSshArgs(options.env), \"-N\", \"-o\", \"StreamLocalBindUnlink=yes\", \"-L\", `${local}:${remotePath}`, machine.target], { env: hardenedSshEnv(options.env), stdio: \"ignore\", windowsHide: true });",
+          "    const child = spawn(options.sshBin ?? \"ssh\", [...herdrSshArgs(options.env, options.sshConfig ?? hostMachineConnection(machine).sshConfig), \"-N\", \"-o\", \"StreamLocalBindUnlink=yes\", \"-L\", `${local}:${remotePath}`, machine.target], { env: hardenedSshEnv(options.env), stdio: \"ignore\", windowsHide: true });"
+        ],
+        [
+          "    const child = spawn(file, args, { env: options.env, stdio: [\"ignore\", \"pipe\", \"pipe\"], windowsHide: true });",
+          "    const child = spawn(file, args, { env: options.env, stdio: [\"pipe\", \"pipe\", \"pipe\"], windowsHide: true });\n        child.stdin.on(\"error\",()=>{});child.stdin.end(options.input??undefined);"
+        ],
+        [
+          "maxBuffer: options.maxBuffer });",
+          "maxBuffer: options.maxBuffer, input:options.input });"
+        ],
+        [
+          "function sshMachineAccess(machine, options = {}) {",
+          "async function forwardHostPorts(machine,ports,options={}) {\n    if(!Array.isArray(ports)||!ports.length||ports.some(port=>!Number.isSafeInteger(port)||port<1024||port>65535)||new Set(ports).size!==ports.length)throw new Error(\"Invalid explicit loopback forwarding ports\");\n    const args=[...herdrSshArgs(options.env,options.sshConfig??hostMachineConnection(machine).sshConfig),...ports.flatMap(port=>[\"-R\",`127.0.0.1:${port}:127.0.0.1:${port}`]),machine.target,\"printf 'COTHINK_FORWARD_READY\\\\n'; cat\"];\n    const child=spawn(options.sshBin??\"ssh\",args,{env:hardenedSshEnv(options.env),stdio:[\"pipe\",\"pipe\",\"pipe\"],windowsHide:true});\n    child.stdin.on(\"error\",()=>{});let stderr=\"\",ready=false;child.stderr.on(\"data\",chunk=>{stderr=(stderr+chunk).slice(-4096);});\n    const closed=new Promise(resolve=>{child.once(\"close\",(code,signal)=>resolve({code,signal}));});\n    try{await new Promise((resolve,reject)=>{let text=\"\";const timer=setTimeout(()=>reject(new Error(\"SSH reverse-forward readiness deadline\")),15000);\n      child.once(\"error\",error=>{clearTimeout(timer);reject(error);});child.once(\"exit\",()=>{clearTimeout(timer);if(!ready)reject(new Error(\"SSH reverse-forward failed: \"+stderr));});\n      child.stdout.on(\"data\",chunk=>{text+=chunk;if(text.length>4096){clearTimeout(timer);reject(new Error(\"Unexpected SSH readiness output\"));}else if(text.includes(\"COTHINK_FORWARD_READY\\n\")){clearTimeout(timer);ready=true;resolve();}});\n    });}catch(error){await terminateChild(child);throw error;}\n    return {pid:child.pid,closed,assertAlive(){if(child.exitCode!==null||child.signalCode!==null)throw new Error(\"SSH reverse-forward closed\");},close:()=>terminateChild(child)};\n}\nfunction sshMachineAccess(machine, options = {}) {"
+        ],
+        [
+          "  return { shellCommand: remoteShellCommand, run: (command, limits = {}) => runHerdrRemoteCommand(machine, command, { ...options, ...limits }), runAsync: (command, limits = {}) => runHerdrRemoteCommandAsync(machine, command, { ...options, ...limits }), openSockets: () => openSshSockets(machine, options) };",
+          "  return { shellCommand: remoteShellCommand, run: (command, limits = {}) => runHerdrRemoteCommand(machine, command, { ...options, ...limits }), runAsync: (command, limits = {}) => runHerdrRemoteCommandAsync(machine, command, { ...options, ...limits }), forwardHostPorts:ports=>forwardHostPorts(machine,ports,options), openSockets: () => openSshSockets(machine, options) };"
+        ]
+      ]
+    },
+    {
+      "path": "src/runs/shared/herdr-connection.js",
+      "before": "cac6ba9647d794618c147d098935784aa2ebd0179fa9daa8ec1beb0b56989b22",
+      "after": "8f115dc882f00844334bf97a7cf8756d57ecc53894dbaa129bb65e791e14d0ae",
+      "replacements": [
+        [
+          "import { spawn, spawnSync } from \"node:child_process\";\nimport * as fs from \"node:fs\";\nimport * as ne",
+          "import {hostMachineConnection} from \"./host-integration.js\";\nimport { spawn, spawnSync } from \"node:child_process\";\nimport * as fs from \"node:fs\";\nimport * as ne"
+        ],
+        [
+          "function herdrSshArgs(source = process.env) {",
+          "function herdrSshArgs(source = process.env, sshConfig) {\n    if(sshConfig!==undefined&&(typeof sshConfig!==\"string\"||!path.isAbsolute(sshConfig)||/[\\0\\r\\n]/.test(sshConfig)))throw new Error(\"Invalid explicit SSH configuration\");"
+        ],
+        [
+          "return [...HERDR_SSH_BASE,",
+          "return [...(sshConfig?[\"-F\",sshConfig]:[]),...HERDR_SSH_BASE,"
+        ],
+        [
+          "export function runHerdrRemoteCommand(machine, command, options = {}) { return spawnSync(options.sshBin ?? \"ssh\", [...herdrSshArgs(options.env), machine.target, command], { encoding: \"utf8\", env: hardenedSshEnv(options.env), timeout: options.timeout ?? 15_000, maxBuffer: options.maxBuffer ?? MAX_DISCOVERY_BYTES, windowsHide: true }); }",
+          "export function runHerdrRemoteCommand(machine, command, options = {}) { return spawnSync(options.sshBin ?? \"ssh\", [...herdrSshArgs(options.env, options.sshConfig ?? hostMachineConnection(machine).sshConfig), machine.target, command], { encoding: \"utf8\", env: hardenedSshEnv(options.env), timeout: options.timeout ?? 15_000, maxBuffer: options.maxBuffer ?? MAX_DISCOVERY_BYTES, windowsHide: true }); }"
+        ],
+        [
+          "    return runBoundedCommand(options.sshBin ?? \"ssh\", [...herdrSshArgs(options.env), machine.target, command], { env: hardenedSshEnv(options.env), timeout: options.timeout, maxBuffer: options.maxBuffer });",
+          "    return runBoundedCommand(options.sshBin ?? \"ssh\", [...herdrSshArgs(options.env, options.sshConfig ?? hostMachineConnection(machine).sshConfig), machine.target, command], { env: hardenedSshEnv(options.env), timeout: options.timeout, maxBuffer: options.maxBuffer });"
+        ],
+        [
+          "        const child = spawn(options.sshBin ?? \"ssh\", [...herdrSshArgs(options.env), \"-N\", \"-o\", \"StreamLocalBindUnlink=yes\", \"-L\", `${local}:${remotePath}`, machine.target], { env: hardenedSshEnv(options.env), stdio: \"ignore\", windowsHide: true });",
+          "        const child = spawn(options.sshBin ?? \"ssh\", [...herdrSshArgs(options.env, options.sshConfig ?? hostMachineConnection(machine).sshConfig), \"-N\", \"-o\", \"StreamLocalBindUnlink=yes\", \"-L\", `${local}:${remotePath}`, machine.target], { env: hardenedSshEnv(options.env), stdio: \"ignore\", windowsHide: true });"
+        ],
+        [
+          "        const child = spawn(file, args, { env: options.env, stdio: [\"ignore\", \"pipe\", \"pipe\"], windowsHide: true });",
+          "        const child = spawn(file, args, { env: options.env, stdio: [\"pipe\", \"pipe\", \"pipe\"], windowsHide: true });\n        child.stdin.on(\"error\",()=>{});child.stdin.end(options.input??undefined);"
+        ],
+        [
+          "maxBuffer: options.maxBuffer });",
+          "maxBuffer: options.maxBuffer, input:options.input });"
+        ],
+        [
+          "export function sshMachineAccess(machine, options = {}) {",
+          "async function forwardHostPorts(machine,ports,options={}) {\n    if(!Array.isArray(ports)||!ports.length||ports.some(port=>!Number.isSafeInteger(port)||port<1024||port>65535)||new Set(ports).size!==ports.length)throw new Error(\"Invalid explicit loopback forwarding ports\");\n    const args=[...herdrSshArgs(options.env,options.sshConfig??hostMachineConnection(machine).sshConfig),...ports.flatMap(port=>[\"-R\",`127.0.0.1:${port}:127.0.0.1:${port}`]),machine.target,\"printf 'COTHINK_FORWARD_READY\\\\n'; cat\"];\n    const child=spawn(options.sshBin??\"ssh\",args,{env:hardenedSshEnv(options.env),stdio:[\"pipe\",\"pipe\",\"pipe\"],windowsHide:true});\n    child.stdin.on(\"error\",()=>{});let stderr=\"\",ready=false;child.stderr.on(\"data\",chunk=>{stderr=(stderr+chunk).slice(-4096);});\n    const closed=new Promise(resolve=>{child.once(\"close\",(code,signal)=>resolve({code,signal}));});\n    try{await new Promise((resolve,reject)=>{let text=\"\";const timer=setTimeout(()=>reject(new Error(\"SSH reverse-forward readiness deadline\")),15000);\n      child.once(\"error\",error=>{clearTimeout(timer);reject(error);});child.once(\"exit\",()=>{clearTimeout(timer);if(!ready)reject(new Error(\"SSH reverse-forward failed: \"+stderr));});\n      child.stdout.on(\"data\",chunk=>{text+=chunk;if(text.length>4096){clearTimeout(timer);reject(new Error(\"Unexpected SSH readiness output\"));}else if(text.includes(\"COTHINK_FORWARD_READY\\n\")){clearTimeout(timer);ready=true;resolve();}});\n    });}catch(error){await terminateChild(child);throw error;}\n    return {pid:child.pid,closed,assertAlive(){if(child.exitCode!==null||child.signalCode!==null)throw new Error(\"SSH reverse-forward closed\");},close:()=>terminateChild(child)};\n}\nexport function sshMachineAccess(machine, options = {}) {"
+        ],
+        [
+          "    return { shellCommand: remoteShellCommand, run: (command, limits = {}) => runHerdrRemoteCommand(machine, command, { ...options, ...limits }), runAsync: (command, limits = {}) => runHerdrRemoteCommandAsync(machine, command, { ...options, ...limits }), openSockets: () => openSshSockets(machine, options) };",
+          "    return { shellCommand: remoteShellCommand, run: (command, limits = {}) => runHerdrRemoteCommand(machine, command, { ...options, ...limits }), runAsync: (command, limits = {}) => runHerdrRemoteCommandAsync(machine, command, { ...options, ...limits }), forwardHostPorts:ports=>forwardHostPorts(machine,ports,options), openSockets: () => openSshSockets(machine, options) };"
+        ]
+      ]
+    },
+    {
+      "path": "src/runs/shared/herdr-pane-host.js",
+      "before": "816757b6f588c8d7b219543782650223f1281f2d5e3ee04513deb2fb059e0538",
+      "after": "01c5df4e5e237acf2bb36e3a0f4b02a6b95753f60d648bb707909382234dda09",
+      "replacements": [
+        [
+          "return { terminalId, paneId };",
+          "// Named registration can lag agent.start/bridge startup. Poll observations only, never prompt.\n    const readyDeadline=clock.now()+(options.registrationTimeoutMs??15000);\n    for(;;){\n      let current;\n      try{current=parseHerdrAgent(await connection.client.call(\"agent.get\",{target:name}),\"agent_info\");}\n      catch(error){if(!/not an active named agent|not found/i.test(String(error?.message)))throw error;}\n      if(current){if(!ownsHerdrPane(current,terminalId,paneId))throw new Error(\"Herdr named agent identity changed during startup\");if(current.agent===kind&&!current.launch_pending&&current.interactive_ready===true)break;}\n      const pane=tagged(await connection.client.call(\"pane.get\",{pane_id:paneId}),\"pane_info\",\"pane\");\n      if(pane.pane_id!==paneId||pane.workspace_id!==owned.workspaceId||pane.tab_id!==owned.tabId)throw new Error(\"Herdr startup pane ownership changed\");\n      if(clock.now()>=readyDeadline)throw new Error(\"Herdr named-agent registration deadline elapsed before any prompt\");\n      await clock.wait(Math.min(pollMs,readyDeadline-clock.now()));\n    }\n    return { terminalId, paneId };"
+        ]
+      ]
+    },
+    {
+      "path": "bundle/chunk-J5YL7LYR.js",
+      "before": "6d54d0334fad184fc29a7c9d905b753566a6e47dd893a166e0c423473fde7067",
+      "after": "9a63c3deae62195f3fa3d27a0ff7ca8c291de1f8b29999493a4e8b93127d2707",
+      "replacements": [
+        [
+          "return { terminalId, paneId };",
+          "// Named registration can lag agent.start/bridge startup. Poll observations only, never prompt.\n    const readyDeadline=clock.now()+(options.registrationTimeoutMs??15000);\n    for(;;){\n      let current;\n      try{current=parseHerdrAgent(await connection.client.call(\"agent.get\",{target:name}),\"agent_info\");}\n      catch(error){if(!/not an active named agent|not found/i.test(String(error?.message)))throw error;}\n      if(current){if(!ownsHerdrPane(current,terminalId,paneId))throw new Error(\"Herdr named agent identity changed during startup\");if(current.agent===kind&&!current.launch_pending&&current.interactive_ready===true)break;}\n      const pane=tagged(await connection.client.call(\"pane.get\",{pane_id:paneId}),\"pane_info\",\"pane\");\n      if(pane.pane_id!==paneId||pane.workspace_id!==owned.workspaceId||pane.tab_id!==owned.tabId)throw new Error(\"Herdr startup pane ownership changed\");\n      if(clock.now()>=readyDeadline)throw new Error(\"Herdr named-agent registration deadline elapsed before any prompt\");\n      await clock.wait(Math.min(pollMs,readyDeadline-clock.now()));\n    }\n    return { terminalId, paneId };"
+        ],
+        [
+          "import {\n  PLACED_RESTORE_UNSUPPORTED,\n  REX_BUNDLE_BIN,\n  REX_CALL_TIMEOUT_MS,\n  REX_EXIT_GONE,\n  R",
+          "import {prepareHostRemote,stopHostRemote,hostChildStarted,hostChildTerminal} from \"../src/runs/shared/host-integration.js\";\nimport {\n  PLACED_RESTORE_UNSUPPORTED,\n  REX_BUNDLE_BIN,\n  REX_CALL_TIMEOUT_MS,\n  REX_EXIT_GONE,\n  R"
+        ],
+        [
+          "throw new Error(\"Herdr pane-native Pi launch requires a Herdr saved machine.\");\n  const policy = serializeHerdrPiLaunch(launch);",
+          "throw new Error(\"Herdr pane-native Pi launch requires a Herdr saved machine.\");\n  const policy = await prepareHostRemote(launch) ?? serializeHerdrPiLaunch(launch);"
+        ],
+        [
+          "    serializeHerdrPiLaunch(launch);",
+          "    if(!launch.hostAdmission)serializeHerdrPiLaunch(launch);"
+        ],
+        [
+          "environment: { [HERDR_PI_MODE_ENV]: \"1\", [HERDR_PI_RUN_ENV]: runId, [HERDR_PI_RUNTIME_DIR_ENV]: runtimeDir }",
+          "environment: { ...policy.environment, [HERDR_PI_MODE_ENV]: \"1\", [HERDR_PI_RUN_ENV]: runId, [HERDR_PI_RUNTIME_DIR_ENV]: runtimeDir }"
+        ],
+        [
+          "reconnectSession = session;",
+          "if(launch.hostAdmission){\n          const receipt=configured.hostReceipt;\n          if(!receipt||receipt.sessionId!==manifest.nativeSessionId)throw new Error(\"Missing managed remote runtime receipt\");\n          await hostChildStarted(launch,{...receipt,control:{abort:()=>session.abort()}});\n          session.hostDispose=async()=>{const facts=await stopHostRemote(launch);await hostChildTerminal(launch,{sessionId:manifest.nativeSessionId,...facts});};\n        }\n        reconnectSession = session;"
+        ],
+        [
+          "this.#disposed = true;",
+          "this.#disposed = true; if(this.hostDispose)await this.hostDispose();"
+        ],
+        [
+          "async dispose() {\n    if (this.#disposed) return;\n    this.#disposed = true; if(this.hostDispose)await this.hostDispose();\n    if (this.#replyTimer) clearInterval(this.#replyTimer);\n    this.bridge.close();\n    await this.bridgeForward.close();\n    await this.owner.cleanup(this.#aborted);\n  }\n  ",
+          "async dispose() {\n      if(this.#disposed)return;this.#disposed=true;\n      if(this.#replyTimer)clearInterval(this.#replyTimer);\n      const errors=[];\n      try{await this.hostDispose?.();}catch(error){errors.push(error);}\n      try{this.bridge.close();}catch(error){errors.push(error);}\n      try{await this.bridgeForward.close();}catch(error){errors.push(error);}\n      try{await this.owner.cleanup(this.#aborted);}catch(error){errors.push(error);}\n      if(errors.length)throw new AggregateError(errors,\"Remote native cleanup incomplete\");\n    }\n    "
+        ],
+        [
+          "await hostChildStarted(launch,{...receipt,control:{abort:()=>session.abort()}});",
+          "await hostChildStarted(launch,{...receipt,remoteIdentity:{...identity,cursor:session.evidenceCursor},control:{abort:()=>session.abort()}});"
+        ],
+        [
+          "await hostChildTerminal(launch,{sessionId:manifest.nativeSessionId,...facts});",
+          "await hostChildTerminal(launch,{sessionId:manifest.nativeSessionId,...facts,remoteIdentity:{...session.identity,cursor:session.evidenceCursor}});"
+        ],
+        [
+          "async function startPlacedPiSession(launch, owner, policy) {\n  const machine = owner.machine, runId = owner.runId, runtimeDir = owner.runtimeDir, connection = owner.connection;\n  try {\n    let reconnectSession;\n    const agentName = `pi-${runId.slice(-20)}`;\n    const { owned, terminalId } = await owner.launch({ kind: \"pi\", name: agentName, args: policy.args, environment: { ...policy.environment, [HERDR_PI_MODE_ENV]: \"1\", [HERDR_PI_RUN_ENV]: runId, [HERDR_PI_RUNTIME_DIR_ENV]: runtimeDir } }, () => owner.subscribe(() => {\n    }, () => void reconnectSession?.reconnect()));\n    const manifest = await discoverPlacedBridgeManifest(owner.access, runId, runtimeDir, \"The placed Pi did not start the pi-subagents bridge, so its pane was closed. Start pi in a new pane on that machine to see why: it may wait on a prompt (such as a macOS folder-access prompt for the terminal app), exit at startup, or not load the same pi-subagents version as an extension.\");\n    if (manifest.protocol !== HERDR_PI_PROTOCOL || manifest.packageVersion !== package_default.version) throw new Error(`Remote pi-subagents bridge version mismatch (remote ${manifest.packageVersion}, local ${package_default.version}).`);\n    const bridgeForward = await connection.forwardRemoteSocket(manifest.socketPath, \"bridge\");\n    const bridge = new BridgeChannel(bridgeForward.socketPath, runId);\n    const ready = await waitForReadyBridgeFrame(bridge, 15e3, \"Remote Pi bridge handshake timed out.\");\n    if (ready.packageVersion !== package_default.version || ready.nativeSessionId !== manifest.nativeSessionId || ready.cwd !== machine.cwd) throw new Error(\"Remote Pi bridge handshake identity mismatch.\");\n    const configured = await Promise.race([bridge.configure(policy.resources), bridge.failure]);\n    if (configured.nativeSessionId !== manifest.nativeSessionId || configured.agent !== policy.resources.agent) throw new Error(\"Remote Pi resource resolution identity mismatch.\");\n    if (!Array.isArray(configured.tools) || policy.resources.toolCeiling && configured.tools.some((tool) => !policy.resources.toolCeiling.includes(String(tool)))) throw new Error(\"Remote Pi active-tool ceiling acknowledgement mismatch.\");\n    const missingRequired = (launch.runtime.requiredTools ?? []).filter((tool) => !configured.tools.includes(tool));\n    if (missingRequired.length) throw new Error(`Remote Pi agent '${policy.resources.agent}' did not activate required tools: ${missingRequired.join(\", \")}.`);\n    if (launch.model && configured.model !== launch.model.split(\":\")[0]) throw new Error(`Remote Pi model '${launch.model}' did not resolve to the requested provider/model.`);\n    const identity = { runId, machineId: machine.id, target: isRexLocalMachine(machine) ? machine.id : machine.target, session: owner.host.sessionOf(connection), workspaceId: owned.workspaceId, tabId: owned.tabId, paneId: owned.paneId, terminalId, agentName, nativeSessionId: manifest.nativeSessionId, cwd: machine.cwd, runtimeDir };\n    owner.journal(identity);\n    const session = new HerdrPiSession(owner, bridgeForward, bridge, configured.tools, typeof ready.model === \"string\" ? ready.model : void 0, launch.runtime, ready.initialGit);\n    if(launch.hostAdmission){\n          const receipt=configured.hostReceipt;\n          if(!receipt||receipt.sessionId!==manifest.nativeSessionId)throw new Error(\"Missing managed remote runtime receipt\");\n          await hostChildStarted(launch,{...receipt,remoteIdentity:{...identity,cursor:session.evidenceCursor},control:{abort:()=>session.abort()}});\n          session.hostDispose=async()=>{const facts=await stopHostRemote(launch);await hostChildTerminal(launch,{sessionId:manifest.nativeSessionId,...facts,remoteIdentity:{...session.identity,cursor:session.evidenceCursor}});};\n        }\n        reconnectSession = session;\n    session.armReconnect(() => reconnectHerdrPiSession(session, launch));\n    return session;\n  } catch (error) {\n    await owner.cleanup();\n    throw error;\n  }\n}\n",
+          "async function startPlacedPiSession(launch, owner, policy) {\n  const machine = owner.machine, runId = owner.runId, runtimeDir = owner.runtimeDir, connection = owner.connection;\n    let session, manifest, cleanupPromise;\n    // Keep authenticated stop/exit harvest reachable before any startup acknowledgement.\n    const stopManaged = launch.hostAdmission ? () => cleanupPromise ??= (async () => {\n        const facts = await stopHostRemote(launch);\n        await hostChildTerminal(launch,{sessionId:manifest?.nativeSessionId,...facts,\n            ...(session?{remoteIdentity:{...session.identity,cursor:session.evidenceCursor}}:{})});\n    })() : undefined;\n  try {\n    let reconnectSession;\n    const agentName = `pi-${runId.slice(-20)}`;\n    const { owned, terminalId } = await owner.launch({ kind: \"pi\", name: agentName, args: policy.args, environment: { ...policy.environment, [HERDR_PI_MODE_ENV]: \"1\", [HERDR_PI_RUN_ENV]: runId, [HERDR_PI_RUNTIME_DIR_ENV]: runtimeDir } }, () => owner.subscribe(() => {\n    }, () => void reconnectSession?.reconnect()));\n    manifest = await discoverPlacedBridgeManifest(owner.access, runId, runtimeDir, \"The placed Pi did not start the pi-subagents bridge, so its pane was closed. Start pi in a new pane on that machine to see why: it may wait on a prompt (such as a macOS folder-access prompt for the terminal app), exit at startup, or not load the same pi-subagents version as an extension.\");\n    if (manifest.protocol !== HERDR_PI_PROTOCOL || manifest.packageVersion !== package_default.version) throw new Error(`Remote pi-subagents bridge version mismatch (remote ${manifest.packageVersion}, local ${package_default.version}).`);\n    const bridgeForward = await connection.forwardRemoteSocket(manifest.socketPath, \"bridge\");\n    const bridge = new BridgeChannel(bridgeForward.socketPath, runId);\n    const ready = await waitForReadyBridgeFrame(bridge, 15e3, \"Remote Pi bridge handshake timed out.\");\n    if (ready.packageVersion !== package_default.version || ready.nativeSessionId !== manifest.nativeSessionId || ready.cwd !== machine.cwd) throw new Error(\"Remote Pi bridge handshake identity mismatch.\");\n    const configured = await Promise.race([bridge.configure(policy.resources), bridge.failure]);\n    if (configured.nativeSessionId !== manifest.nativeSessionId || configured.agent !== policy.resources.agent) throw new Error(\"Remote Pi resource resolution identity mismatch.\");\n    if (!Array.isArray(configured.tools) || policy.resources.toolCeiling && configured.tools.some((tool) => !policy.resources.toolCeiling.includes(String(tool)))) throw new Error(\"Remote Pi active-tool ceiling acknowledgement mismatch.\");\n    const missingRequired = (launch.runtime.requiredTools ?? []).filter((tool) => !configured.tools.includes(tool));\n    if (missingRequired.length) throw new Error(`Remote Pi agent '${policy.resources.agent}' did not activate required tools: ${missingRequired.join(\", \")}.`);\n    if (launch.model && configured.model !== launch.model.split(\":\")[0]) throw new Error(`Remote Pi model '${launch.model}' did not resolve to the requested provider/model.`);\n    const identity = { runId, machineId: machine.id, target: isRexLocalMachine(machine) ? machine.id : machine.target, session: owner.host.sessionOf(connection), workspaceId: owned.workspaceId, tabId: owned.tabId, paneId: owned.paneId, terminalId, agentName, nativeSessionId: manifest.nativeSessionId, cwd: machine.cwd, runtimeDir };\n    owner.journal(identity);\n    session = new HerdrPiSession(owner, bridgeForward, bridge, configured.tools, typeof ready.model === \"string\" ? ready.model : void 0, launch.runtime, ready.initialGit);\n    session.hostDispose=stopManaged;\n        if(launch.hostAdmission){\n          const receipt=configured.hostReceipt;\n          if(!receipt||receipt.sessionId!==manifest.nativeSessionId)throw new Error(\"Missing managed remote runtime receipt\");\n          await hostChildStarted(launch,{...receipt,remoteIdentity:{...identity,cursor:session.evidenceCursor},control:{abort:()=>session.abort()}});\n          \n        }\n        reconnectSession = session;\n    session.armReconnect(() => reconnectHerdrPiSession(session, launch));\n    return session;\n  } catch (error) {\n    const cleanupErrors=[];\n        try { await stopManaged?.(); } catch(cleanupError) { cleanupErrors.push(cleanupError); }\n        try { if(session)await session.dispose();else await owner.cleanup(); } catch(cleanupError) { cleanupErrors.push(cleanupError); }\n        // Do not replace the startup failure or turn missing stop evidence into success.\n        if(cleanupErrors.length)try{Object.defineProperty(error,\"cleanupErrors\",{value:cleanupErrors,configurable:true});}catch{}\n        throw error;\n  }\n}\n"
+        ],
+        [
+          "async function createHerdrPiSession(launch) {\n  if (!launch.machine) throw new Error(\"Pane-native Pi launch requires a saved machine.\");\n  if (launch.machine.provider !== \"herdr\") throw new Error(\"Herdr pane-native Pi launch requires a Herdr saved machine.\");\n  const policy = await prepareHostRemote(launch) ?? serializeHerdrPiLaunch(launch);\n  const runId = safeRunId(launch.runtime.runId);\n  return startPlacedPiSession(launch, await HerdrPlacedRunOwner.create(launch.machine, runId), policy);\n}",
+          "async function createHerdrPiSession(launch) {\n  if (!launch.machine) throw new Error(\"Pane-native Pi launch requires a saved machine.\");\n  if (launch.machine.provider !== \"herdr\") throw new Error(\"Herdr pane-native Pi launch requires a Herdr saved machine.\");\n    let owner;\n    try {\n        const policy = await prepareHostRemote(launch) ?? serializeHerdrPiLaunch(launch);\n        const runId = safeRunId(launch.runtime.runId);\n        owner = await HerdrPlacedRunOwner.create(launch.machine, runId);\n        return await startPlacedPiSession(launch, owner, policy);\n    } catch(error) {\n        // Preparation may already own a remote instance even when native owner creation fails.\n        if(!owner&&launch.hostAdmission)try {\n            const facts=await stopHostRemote(launch);\n            await hostChildTerminal(launch,facts);\n        } catch(cleanupError) {\n            try{Object.defineProperty(error,\"cleanupErrors\",{value:[cleanupError],configurable:true});}catch{}\n        }\n        throw error;\n    }\n}"
+        ]
+      ]
+    },
+    {
+      "path": "src/runs/shared/herdr-placed-run.js",
+      "before": "27db47e3b3cfa47e55d32ce050db220e97034c24079d99f3b4d1555a8e1471d1",
+      "after": "72c5f2cb5801d4e9eeff9c4b137f76fe1e4e3a2a96cf35408d303e63d6f04090",
+      "replacements": [
+        [
+          "import { randomBytes } from \"node:crypto\";\nimport * as fs from \"node:fs\";\nimport * as net from \"node",
+          "import {prepareHostRemote,stopHostRemote,hostChildStarted,hostChildTerminal} from \"./host-integration.js\";\nimport { randomBytes } from \"node:crypto\";\nimport * as fs from \"node:fs\";\nimport * as net from \"node"
+        ],
+        [
+          "throw new Error(\"Herdr pane-native Pi launch requires a Herdr saved machine.\");\n    const policy = serializeHerdrPiLaunch(launch);",
+          "throw new Error(\"Herdr pane-native Pi launch requires a Herdr saved machine.\");\n    const policy = await prepareHostRemote(launch) ?? serializeHerdrPiLaunch(launch);"
+        ],
+        [
+          "            return local.create(launch); serializeHerdrPiLaunch(launch); const child = await createRemote(launch); remote.add(child); return child; }, async dispose() { await Promise.allSettled([...remote].map((child) => child.dispose())); remote.clear(); await local.dispose(); } };",
+          "            return local.create(launch); if(!launch.hostAdmission)serializeHerdrPiLaunch(launch); const child = await createRemote(launch); remote.add(child); return child; }, async dispose() { await Promise.allSettled([...remote].map((child) => child.dispose())); remote.clear(); await local.dispose(); } };"
+        ],
+        [
+          "environment: { [HERDR_PI_MODE_ENV]: \"1\", [HERDR_PI_RUN_ENV]: runId, [HERDR_PI_RUNTIME_DIR_ENV]: runtimeDir }",
+          "environment: { ...policy.environment, [HERDR_PI_MODE_ENV]: \"1\", [HERDR_PI_RUN_ENV]: runId, [HERDR_PI_RUNTIME_DIR_ENV]: runtimeDir }"
+        ],
+        [
+          "reconnectSession = session;",
+          "if(launch.hostAdmission){\n          const receipt=configured.hostReceipt;\n          if(!receipt||receipt.sessionId!==manifest.nativeSessionId)throw new Error(\"Missing managed remote runtime receipt\");\n          await hostChildStarted(launch,{...receipt,control:{abort:()=>session.abort()}});\n          session.hostDispose=async()=>{const facts=await stopHostRemote(launch);await hostChildTerminal(launch,{sessionId:manifest.nativeSessionId,...facts});};\n        }\n        reconnectSession = session;"
+        ],
+        [
+          "this.#disposed = true;",
+          "this.#disposed = true; if(this.hostDispose)await this.hostDispose();"
+        ],
+        [
+          "async dispose() { if (this.#disposed)\n        return; this.#disposed = true; if(this.hostDispose)await this.hostDispose(); if (this.#replyTimer)\n        clearInterval(this.#replyTimer); this.bridge.close(); await this.bridgeForward.close(); await this.owner.cleanup(this.#aborted); }\n    ",
+          "async dispose() {\n      if(this.#disposed)return;this.#disposed=true;\n      if(this.#replyTimer)clearInterval(this.#replyTimer);\n      const errors=[];\n      try{await this.hostDispose?.();}catch(error){errors.push(error);}\n      try{this.bridge.close();}catch(error){errors.push(error);}\n      try{await this.bridgeForward.close();}catch(error){errors.push(error);}\n      try{await this.owner.cleanup(this.#aborted);}catch(error){errors.push(error);}\n      if(errors.length)throw new AggregateError(errors,\"Remote native cleanup incomplete\");\n    }\n    "
+        ],
+        [
+          "await hostChildStarted(launch,{...receipt,control:{abort:()=>session.abort()}});",
+          "await hostChildStarted(launch,{...receipt,remoteIdentity:{...identity,cursor:session.evidenceCursor},control:{abort:()=>session.abort()}});"
+        ],
+        [
+          "await hostChildTerminal(launch,{sessionId:manifest.nativeSessionId,...facts});",
+          "await hostChildTerminal(launch,{sessionId:manifest.nativeSessionId,...facts,remoteIdentity:{...session.identity,cursor:session.evidenceCursor}});"
+        ],
+        [
+          "async function startPlacedPiSession(launch, owner, policy) {\n    const machine = owner.machine, runId = owner.runId, runtimeDir = owner.runtimeDir, connection = owner.connection;\n    try {\n        let reconnectSession;\n        const agentName = `pi-${runId.slice(-20)}`;\n        const { owned, terminalId } = await owner.launch({ kind: \"pi\", name: agentName, args: policy.args, environment: { ...policy.environment, [HERDR_PI_MODE_ENV]: \"1\", [HERDR_PI_RUN_ENV]: runId, [HERDR_PI_RUNTIME_DIR_ENV]: runtimeDir } }, () => owner.subscribe(() => { }, () => void reconnectSession?.reconnect()));\n        const manifest = await discoverPlacedBridgeManifest(owner.access, runId, runtimeDir, \"The placed Pi did not start the pi-subagents bridge, so its pane was closed. Start pi in a new pane on that machine to see why: it may wait on a prompt (such as a macOS folder-access prompt for the terminal app), exit at startup, or not load the same pi-subagents version as an extension.\");\n        if (manifest.protocol !== HERDR_PI_PROTOCOL || manifest.packageVersion !== packageJson.version)\n            throw new Error(`Remote pi-subagents bridge version mismatch (remote ${manifest.packageVersion}, local ${packageJson.version}).`);\n        const bridgeForward = await connection.forwardRemoteSocket(manifest.socketPath, \"bridge\");\n        const bridge = new BridgeChannel(bridgeForward.socketPath, runId);\n        const ready = await waitForReadyBridgeFrame(bridge, 15_000, \"Remote Pi bridge handshake timed out.\");\n        if (ready.packageVersion !== packageJson.version || ready.nativeSessionId !== manifest.nativeSessionId || ready.cwd !== machine.cwd)\n            throw new Error(\"Remote Pi bridge handshake identity mismatch.\");\n        const configured = await Promise.race([bridge.configure(policy.resources), bridge.failure]);\n        if (configured.nativeSessionId !== manifest.nativeSessionId || configured.agent !== policy.resources.agent)\n            throw new Error(\"Remote Pi resource resolution identity mismatch.\");\n        if (!Array.isArray(configured.tools) || (policy.resources.toolCeiling && configured.tools.some((tool) => !policy.resources.toolCeiling.includes(String(tool)))))\n            throw new Error(\"Remote Pi active-tool ceiling acknowledgement mismatch.\");\n        // The remote Pi never receives the runtime contract, so required tools are checked here, against what it activated.\n        const missingRequired = (launch.runtime.requiredTools ?? []).filter((tool) => !configured.tools.includes(tool));\n        if (missingRequired.length)\n            throw new Error(`Remote Pi agent '${policy.resources.agent}' did not activate required tools: ${missingRequired.join(\", \")}.`);\n        if (launch.model && configured.model !== launch.model.split(\":\")[0])\n            throw new Error(`Remote Pi model '${launch.model}' did not resolve to the requested provider/model.`);\n        const identity = { runId, machineId: machine.id, target: isRexLocalMachine(machine) ? machine.id : machine.target, session: owner.host.sessionOf(connection), workspaceId: owned.workspaceId, tabId: owned.tabId, paneId: owned.paneId, terminalId, agentName, nativeSessionId: manifest.nativeSessionId, cwd: machine.cwd, runtimeDir };\n        owner.journal(identity);\n        const session = new HerdrPiSession(owner, bridgeForward, bridge, configured.tools, typeof ready.model === \"string\" ? ready.model : undefined, launch.runtime, ready.initialGit);\n        if(launch.hostAdmission){\n          const receipt=configured.hostReceipt;\n          if(!receipt||receipt.sessionId!==manifest.nativeSessionId)throw new Error(\"Missing managed remote runtime receipt\");\n          await hostChildStarted(launch,{...receipt,remoteIdentity:{...identity,cursor:session.evidenceCursor},control:{abort:()=>session.abort()}});\n          session.hostDispose=async()=>{const facts=await stopHostRemote(launch);await hostChildTerminal(launch,{sessionId:manifest.nativeSessionId,...facts,remoteIdentity:{...session.identity,cursor:session.evidenceCursor}});};\n        }\n        reconnectSession = session;\n        session.armReconnect(() => reconnectHerdrPiSession(session, launch));\n        return session;\n    }\n    catch (error) {\n        await owner.cleanup();\n        throw error;\n    }\n}\n",
+          "async function startPlacedPiSession(launch, owner, policy) {\n    const machine = owner.machine, runId = owner.runId, runtimeDir = owner.runtimeDir, connection = owner.connection;\n    let session, manifest, cleanupPromise;\n    // Keep authenticated stop/exit harvest reachable before any startup acknowledgement.\n    const stopManaged = launch.hostAdmission ? () => cleanupPromise ??= (async () => {\n        const facts = await stopHostRemote(launch);\n        await hostChildTerminal(launch,{sessionId:manifest?.nativeSessionId,...facts,\n            ...(session?{remoteIdentity:{...session.identity,cursor:session.evidenceCursor}}:{})});\n    })() : undefined;\n    try {\n        let reconnectSession;\n        const agentName = `pi-${runId.slice(-20)}`;\n        const { owned, terminalId } = await owner.launch({ kind: \"pi\", name: agentName, args: policy.args, environment: { ...policy.environment, [HERDR_PI_MODE_ENV]: \"1\", [HERDR_PI_RUN_ENV]: runId, [HERDR_PI_RUNTIME_DIR_ENV]: runtimeDir } }, () => owner.subscribe(() => { }, () => void reconnectSession?.reconnect()));\n        manifest = await discoverPlacedBridgeManifest(owner.access, runId, runtimeDir, \"The placed Pi did not start the pi-subagents bridge, so its pane was closed. Start pi in a new pane on that machine to see why: it may wait on a prompt (such as a macOS folder-access prompt for the terminal app), exit at startup, or not load the same pi-subagents version as an extension.\");\n        if (manifest.protocol !== HERDR_PI_PROTOCOL || manifest.packageVersion !== packageJson.version)\n            throw new Error(`Remote pi-subagents bridge version mismatch (remote ${manifest.packageVersion}, local ${packageJson.version}).`);\n        const bridgeForward = await connection.forwardRemoteSocket(manifest.socketPath, \"bridge\");\n        const bridge = new BridgeChannel(bridgeForward.socketPath, runId);\n        const ready = await waitForReadyBridgeFrame(bridge, 15_000, \"Remote Pi bridge handshake timed out.\");\n        if (ready.packageVersion !== packageJson.version || ready.nativeSessionId !== manifest.nativeSessionId || ready.cwd !== machine.cwd)\n            throw new Error(\"Remote Pi bridge handshake identity mismatch.\");\n        const configured = await Promise.race([bridge.configure(policy.resources), bridge.failure]);\n        if (configured.nativeSessionId !== manifest.nativeSessionId || configured.agent !== policy.resources.agent)\n            throw new Error(\"Remote Pi resource resolution identity mismatch.\");\n        if (!Array.isArray(configured.tools) || (policy.resources.toolCeiling && configured.tools.some((tool) => !policy.resources.toolCeiling.includes(String(tool)))))\n            throw new Error(\"Remote Pi active-tool ceiling acknowledgement mismatch.\");\n        // The remote Pi never receives the runtime contract, so required tools are checked here, against what it activated.\n        const missingRequired = (launch.runtime.requiredTools ?? []).filter((tool) => !configured.tools.includes(tool));\n        if (missingRequired.length)\n            throw new Error(`Remote Pi agent '${policy.resources.agent}' did not activate required tools: ${missingRequired.join(\", \")}.`);\n        if (launch.model && configured.model !== launch.model.split(\":\")[0])\n            throw new Error(`Remote Pi model '${launch.model}' did not resolve to the requested provider/model.`);\n        const identity = { runId, machineId: machine.id, target: isRexLocalMachine(machine) ? machine.id : machine.target, session: owner.host.sessionOf(connection), workspaceId: owned.workspaceId, tabId: owned.tabId, paneId: owned.paneId, terminalId, agentName, nativeSessionId: manifest.nativeSessionId, cwd: machine.cwd, runtimeDir };\n        owner.journal(identity);\n        session = new HerdrPiSession(owner, bridgeForward, bridge, configured.tools, typeof ready.model === \"string\" ? ready.model : undefined, launch.runtime, ready.initialGit);\n        session.hostDispose=stopManaged;\n        if(launch.hostAdmission){\n          const receipt=configured.hostReceipt;\n          if(!receipt||receipt.sessionId!==manifest.nativeSessionId)throw new Error(\"Missing managed remote runtime receipt\");\n          await hostChildStarted(launch,{...receipt,remoteIdentity:{...identity,cursor:session.evidenceCursor},control:{abort:()=>session.abort()}});\n          \n        }\n        reconnectSession = session;\n        session.armReconnect(() => reconnectHerdrPiSession(session, launch));\n        return session;\n    }\n    catch (error) {\n        const cleanupErrors=[];\n        try { await stopManaged?.(); } catch(cleanupError) { cleanupErrors.push(cleanupError); }\n        try { if(session)await session.dispose();else await owner.cleanup(); } catch(cleanupError) { cleanupErrors.push(cleanupError); }\n        // Do not replace the startup failure or turn missing stop evidence into success.\n        if(cleanupErrors.length)try{Object.defineProperty(error,\"cleanupErrors\",{value:cleanupErrors,configurable:true});}catch{}\n        throw error;\n    }\n}\n"
+        ],
+        [
+          "export async function createHerdrPiSession(launch) {\n    if (!launch.machine)\n        throw new Error(\"Pane-native Pi launch requires a saved machine.\");\n    if (launch.machine.provider !== \"herdr\")\n        throw new Error(\"Herdr pane-native Pi launch requires a Herdr saved machine.\");\n    const policy = await prepareHostRemote(launch) ?? serializeHerdrPiLaunch(launch);\n    const runId = safeRunId(launch.runtime.runId);\n    return startPlacedPiSession(launch, await HerdrPlacedRunOwner.create(launch.machine, runId), policy);\n}",
+          "export async function createHerdrPiSession(launch) {\n    if (!launch.machine)\n        throw new Error(\"Pane-native Pi launch requires a saved machine.\");\n    if (launch.machine.provider !== \"herdr\")\n        throw new Error(\"Herdr pane-native Pi launch requires a Herdr saved machine.\");\n    let owner;\n    try {\n        const policy = await prepareHostRemote(launch) ?? serializeHerdrPiLaunch(launch);\n        const runId = safeRunId(launch.runtime.runId);\n        owner = await HerdrPlacedRunOwner.create(launch.machine, runId);\n        return await startPlacedPiSession(launch, owner, policy);\n    } catch(error) {\n        // Preparation may already own a remote instance even when native owner creation fails.\n        if(!owner&&launch.hostAdmission)try {\n            const facts=await stopHostRemote(launch);\n            await hostChildTerminal(launch,facts);\n        } catch(cleanupError) {\n            try{Object.defineProperty(error,\"cleanupErrors\",{value:[cleanupError],configurable:true});}catch{}\n        }\n        throw error;\n    }\n}"
+        ]
+      ]
+    },
+    {
+      "path": "src/extension/herdr-pi-bridge.js",
+      "before": "504aff815b9070d2046e0d8a945e66de64afefccacf7917fd54b374d392cd4e5",
+      "after": "444927a39e74089b00bfcf2116aee4d1377a85eb87ee09c1b8ffab828d8e8871",
+      "replacements": [
+        [
+          "                        const resolved = resolveRemoteHerdrResources(process.cwd(), { agent: resources.agent, ...(resources.skills ? { skills: resources.skills } : {}), ...(resources.toolCeiling ? { toolCeiling: resources.toolCeiling } : {}), ...(resources.reads !== undefined ? { reads: resources.reads } : {}) }, context ? pi.getActiveTools() : []);",
+          "                        const managed=globalThis[Symbol.for(\"cothink:native-remote\")];\n                        if(managed&&resources.contractDigest!==managed.contractDigest)throw new Error(\"Managed remote frozen contract mismatch\");\n                        const resolved = managed ? managed.resources : resolveRemoteHerdrResources(process.cwd(), { agent: resources.agent, ...(resources.skills ? { skills: resources.skills } : {}), ...(resources.toolCeiling ? { toolCeiling: resources.toolCeiling } : {}), ...(resources.reads !== undefined ? { reads: resources.reads } : {}) }, context ? pi.getActiveTools() : []);"
+        ],
+        [
+          "                        send({ type: \"configured\", requestId: frame.requestId, nativeSessionId, agent: resolved.agent, skills: resolved.skills, model: context?.model?.provider && context.model.id ? `${context.model.provider}/${context.model.id}` : undefined, tools: acknowledged });",
+          "                        send({ type: \"configured\", requestId: frame.requestId, nativeSessionId, agent: resolved.agent, skills: resolved.skills, model: context?.model?.provider && context.model.id ? `${context.model.provider}/${context.model.id}` : undefined, tools: acknowledged, ...(managed?{hostReceipt:managed.receipt}: {}) });"
+        ],
+        [
+          "socket.on(\"data\", (chunk) => {",
+          "socket.on(\"data\", async (chunk) => {"
+        ],
+        [
+          "if(managed&&resources.contractDigest!==managed.contractDigest)throw new Error(\"Managed remote frozen contract mismatch\");",
+          "if(managed&&resources.contractDigest!==managed.contractDigest)throw new Error(\"Managed remote frozen contract mismatch\");\n                        if(managed){let deadline;try{await Promise.race([managed.ready,new Promise((_,reject)=>deadline=setTimeout(()=>reject(new Error(\"Managed runtime readiness deadline\")),15000))]);}finally{clearTimeout(deadline);}}"
+        ]
+      ]
+    },
+    {
+      "path": "bundle/chunk-VQVVHSY6.js",
+      "before": "fb7d0a13af2ffd41dfa5c1f0da681d3d5e833c2e9d5f69c6967cc10f79330ee6",
+      "after": "24b98aa567093e85ba862c86e2a5f4b2ffbc853eef2d510c9a0e5f4a4c9595f4",
+      "replacements": [
+        [
+          "            const resolved = resolveRemoteHerdrResources(process.cwd(), { agent: resources.agent, ...resources.skills ? { skills: resources.skills } : {}, ...resources.toolCeiling ? { toolCeiling: resources.toolCeiling } : {}, ...resources.reads !== void 0 ? { reads: resources.reads } : {} }, context ? pi.getActiveTools() : []);",
+          "            const managed=globalThis[Symbol.for(\"cothink:native-remote\")];\n                        if(managed&&resources.contractDigest!==managed.contractDigest)throw new Error(\"Managed remote frozen contract mismatch\");\n                        const resolved = managed ? managed.resources : resolveRemoteHerdrResources(process.cwd(), { agent: resources.agent, ...resources.skills ? { skills: resources.skills } : {}, ...resources.toolCeiling ? { toolCeiling: resources.toolCeiling } : {}, ...resources.reads !== void 0 ? { reads: resources.reads } : {} }, context ? pi.getActiveTools() : []);"
+        ],
+        [
+          "            send({ type: \"configured\", requestId: frame.requestId, nativeSessionId, agent: resolved.agent, skills: resolved.skills, model: context?.model?.provider && context.model.id ? `${context.model.provider}/${context.model.id}` : void 0, tools: acknowledged });",
+          "            send({ type: \"configured\", requestId: frame.requestId, nativeSessionId, agent: resolved.agent, skills: resolved.skills, model: context?.model?.provider && context.model.id ? `${context.model.provider}/${context.model.id}` : void 0, tools: acknowledged, ...(managed?{hostReceipt:managed.receipt}: {}) });"
+        ],
+        [
+          "socket.on(\"data\", (chunk) => {",
+          "socket.on(\"data\", async (chunk) => {"
+        ],
+        [
+          "if(managed&&resources.contractDigest!==managed.contractDigest)throw new Error(\"Managed remote frozen contract mismatch\");",
+          "if(managed&&resources.contractDigest!==managed.contractDigest)throw new Error(\"Managed remote frozen contract mismatch\");\n                        if(managed){let deadline;try{await Promise.race([managed.ready,new Promise((_,reject)=>deadline=setTimeout(()=>reject(new Error(\"Managed runtime readiness deadline\")),15000))]);}finally{clearTimeout(deadline);}}"
+        ]
+      ]
+    }
+  ]
+}

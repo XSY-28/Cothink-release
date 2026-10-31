@@ -1,10 +1,20 @@
 {
   "name": "cothink-v2",
-  "version": "0.7.1-windows.1",
+  "version": "0.8.9-native.1",
   "files": [
     "bin/cothink.js",
     "src/cli.js",
     "src/packages.js",
+    "src/plugin-compatibility.js",
+    "src/plugin-work.js",
+    "src/native-background.js",
+    "src/native-background-runtime.js",
+    "src/native-remote.js",
+    "src/native-remote-files.js",
+    "src/native-remote-runtime.js",
+    "src/native-remote-supervisor.js",
+    "src/plugin-helper-runner.js",
+    "src/plugin-helper-extension.js",
     "src/config.js",
     "src/teams.js",
     "src/context.js",
@@ -17,6 +27,8 @@
     "src/terminal.js",
     "src/task.js",
     "src/request-policy.js",
+    "src/request-journal.js",
+    "src/transport-diagnostics.js",
     "src/pi-runtime.js",
     "src/setup.js",
     "src/presentation.js",
@@ -37,7 +49,26 @@
     "LICENSE",
     "VALIDATION.md",
     "packages/agent-sync/LICENSE",
-    "packages/agent-sync/README.md"
+    "packages/agent-sync/README.md",
+    "src/conversation.js",
+    "src/final-answer.js",
+    "src/gui-controller.js",
+    "src/gui-projection.js",
+    "src/gui-server.js",
+    "src/gui-settings.js",
+    "src/gui-work.js",
+    "gui/dist",
+    "gui/src",
+    "gui/index.html",
+    "gui/vite.config.js",
+    "gui/THIRD_PARTY_NOTICES.txt",
+    "src/updates.js",
+    "src/visual-preview.js",
+    "scripts/visual-preview.mjs",
+    "docker/visual-preview.Dockerfile",
+    "docker/visual-preview-manifest.json",
+    "docker/visual-preview-packages.lock",
+    "docs/pi-subagents-host-contract.md"
   ],
   "type": "module",
   "engines": {
@@ -47,7 +78,7 @@
     "cothink": "./bin/cothink.js"
   },
   "scripts": {
-    "test": "node --test test/pi-*.test.js test/agent-sync-*.test.js test/versioning-contract.test.js test/clipboard.test.js test/final-display.test.js",
+    "test": "node --test test/native-background.test.js test/pi-*.test.js test/agent-sync-*.test.js test/versioning-contract.test.js test/clipboard.test.js test/final-display.test.js",
     "test:terminal": "python3 test/pi_terminal_checks.py && python3 test/pi_slash_checks.py && python3 test/pi_changelog_checks.py",
     "start": "node bin/cothink.js",
     "test:pi": "node --test test/pi-*.test.js",
@@ -57,34 +88,56 @@
     "test:work": "node --test test/agent-sync-dispatch.test.js test/agent-sync-entrypoints.test.js",
     "test:agent-sync-core": "node --test packages/agent-sync/test/*.test.js",
     "test:packages": "node --test test/pi-packages.test.js",
-    "test:windows": "node --test test/pi-windows.test.js test/clipboard.test.js test/pi-session.test.js test/pi-setup-io.test.js test/pi-discussion.test.js",
-    "pack:npm": "node scripts/pack-npm.mjs"
+    "test:windows": "node --test test/pi-windows.test.js test/pi-kimi.test.js test/clipboard.test.js test/pi-session.test.js test/pi-setup-io.test.js test/pi-discussion.test.js",
+    "pack:npm": "node scripts/pack-npm.mjs",
+    "build:gui": "vite build --config gui/vite.config.js",
+    "gui": "node bin/cothink.js gui",
+    "test:gui": "node --test test/gui-*.test.js",
+    "test:visual": "node --test test/visual-bench*.test.js test/visual-preview.test.js test/visual-workflow.test.js"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "file:vendor/pi-deps/anthropic-ai-sdk-0.124.0.tgz",
-    "@earendil-works/pi-ai": "1.0.0",
-    "@earendil-works/pi-coding-agent": "file:vendor/pi-deps/earendil-works-pi-coding-agent-1.0.0-cothink.9.tgz",
-    "@earendil-works/pi-tui": "file:vendor/pi-deps/earendil-works-pi-tui-1.0.0.tgz",
+    "@anthropic-ai/sdk": "file:vendor/pi-deps/anthropic-ai-sdk-0.129.0.tgz",
+    "@earendil-works/pi-ai": "1.4.0",
+    "@earendil-works/pi-coding-agent": "file:vendor/pi-deps/earendil-works-pi-coding-agent-1.4.0-cothink.2.tgz",
+    "@earendil-works/pi-tui": "file:vendor/pi-deps/earendil-works-pi-tui-1.4.0.tgz",
+    "jiti": "file:vendor/pi-deps/jiti-2.7.0-cothink.1.tgz",
     "openai": "file:vendor/pi-deps/openai-7.19.0.tgz",
+    "semver": "7.8.5",
     "typebox": "1.3.27"
   },
   "overrides": {
     "openai": "$openai",
     "@anthropic-ai/sdk": "$@anthropic-ai/sdk",
-    "@earendil-works/pi-ai": "$@earendil-works/pi-ai"
+    "@earendil-works/pi-ai": "$@earendil-works/pi-ai",
+    "katex": "$katex",
+    "jiti": "$jiti"
   },
-  "bundledDependencies": [
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/XSY-28/cothink-gui.git"
+  },
+  "description": "Multi-model team collaboration for answers and coding, built on Pi.",
+  "devDependencies": {
+    "happy-dom": "21.0.4",
+    "katex": "0.19.0",
+    "playwright": "1.64.1",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "react-markdown": "10.1.0",
+    "rehype-katex": "7.0.1",
+    "remark-gfm": "4.0.1",
+    "remark-math": "6.0.0",
+    "vite": "8.3.5"
+  },
+  "bundleDependencies": [
     "@anthropic-ai/sdk",
     "@earendil-works/pi-ai",
     "@earendil-works/pi-coding-agent",
     "@earendil-works/pi-tui",
     "openai",
-    "typebox"
-  ],
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/XSY-28/Cothink-release.git"
-  },
-  "description": "Multi-model team collaboration for answers and coding, built on Pi."
+    "typebox",
+    "semver",
+    "jiti"
+  ]
 }

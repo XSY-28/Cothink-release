@@ -2,58 +2,77 @@
   "schemaVersion": 1,
   "upstream": {
     "repository": "earendil-works/pi",
-    "tag": "v1.0.0",
-    "archiveUrl": "https://codeload.github.com/earendil-works/pi/tar.gz/refs/tags/v1.0.0",
-    "archiveSha256": "f6860e67524d24ad9f851fe0d19b184ef81c7d2e7df1bf39c6573655bd11398c"
+    "tag": "v1.4.0",
+    "archiveUrl": "https://codeload.github.com/earendil-works/pi/tar.gz/refs/tags/v1.4.0",
+    "archiveSha256": "8c5b5affd3005dc9ca7f134f0feb0af907d6ab02ce9ed88c512fb2957d98b3f5"
   },
   "catalog": {
-    "package": "@earendil-works/pi-ai@1.0.0",
-    "sha256": "f39b99c29b8598f175b10840e5d2a81983e7c0ce5cae4d7df83a1007447d2c2b",
+    "package": "@earendil-works/pi-ai@1.4.0",
+    "sha256": "b40e2ba8bb6fc332908f8b96e837dc2d1fdfb45eb9cd382f5aed111462981e3c",
     "validatedBy": "upstream check:model-data"
   },
   "selectedFiles": {
-    "packages/coding-agent/src/core/sdk.ts": "1fb8a84ab4dfab28344932b430c8d4abcd234a1c35ae9aebc3049269a813312d",
-    "packages/coding-agent/src/core/model-runtime.ts": "de28a51492788e7f5f4d6f20a57fa8b08e32fd9e766a365211b54a3f3959a177",
-    "packages/coding-agent/src/core/agent-session.ts": "11ce7b78ee9d4235f2cdc80632332c93935ad23d7e5d68fe1aa5b155e1a297c0",
-    "packages/coding-agent/src/modes/interactive/interactive-mode.ts": "2d598d2ced8b3188edc21aa23d791c2c38ccac1f8683144cd1b734d201da8729",
+    "packages/coding-agent/src/core/sdk.ts": "05b75c9e1eaf622433083357d385dcc2166eb985c20516cb5690e7f777027057",
+    "packages/coding-agent/src/core/model-runtime.ts": "db54951b1b8c37b6dac61fe0b4842de9486e1462a68ec52d4b97da90c69268b6",
+    "packages/coding-agent/src/core/agent-session.ts": "e0a6e3e7b662afff9763a6297e0bb600da75e8eff4df443912f2e215bdc6a8e2",
+    "packages/coding-agent/src/modes/interactive/interactive-mode.ts": "fab51416b06840d4fc3b0ba4e50c292b5f022f29f6f7b2322274b7c245e1db70",
     "packages/coding-agent/src/modes/interactive/tui-renderer.ts": "a5b0a847dbac31cceac6e3d6d68aaf46404ceca7ad11e716a2386b68f7a249aa",
-    "packages/ai/src/api/simple-options.ts": "8bb50ff92c1759434ead59d1b4111826b6be47d13f744b8cc3b775c684536d46",
-    "packages/agent/src/agent.ts": "7024a3145a6ebc951a0f030164adb1dfb12d33d6e0dbbac15ef0efda49c87457"
+    "packages/ai/src/api/simple-options.ts": "4fc3131c480cb5c16506037195c5d9668b7b85ce7cf8117ecc77bd81188494ef",
+    "packages/agent/src/agent.ts": "6d0e56bf4443f0cfc5c6a82ce31a3b99f15ff816075bed36403dfa0c95a609c6"
   },
   "patchAllowlist": [
     "packages/coding-agent/src/modes/interactive/interactive-mode.ts",
     "packages/coding-agent/src/modes/interactive/tui-renderer.ts",
     "packages/coding-agent/src/modes/interactive/components/login-dialog.ts",
     "packages/tui/src/components/editor.ts",
-    "packages/coding-agent/src/index.ts"
+    "packages/coding-agent/src/index.ts",
+    "packages/coding-agent/src/core/extensions/loader.ts"
   ],
   "publicApiInsteadOfPatch": {
     "requestPolicy": "wrap ModelRuntime stream/streamSimple, complete delegates once; provider onPayload is awaited before send",
     "limits": "provider onPayload + timeoutMs=0/maxRetries=0; required output fields explicit",
     "persistence": "Agent awaits subscribers and SessionManager writes; errors propagate"
   },
-  "build": "stock-build-with-catalog.log",
+  "build": "build-fixed-source.log",
   "realGenerations": 0,
   "patchFiles": {
     "packages/coding-agent/src/modes/interactive/interactive-mode.ts": {
-      "original": "2d598d2ced8b3188edc21aa23d791c2c38ccac1f8683144cd1b734d201da8729",
-      "patched": "d68458d7308d04a21c6854bb39f9b4fce3050659bc56c31170845269349586a5"
+      "original": "fab51416b06840d4fc3b0ba4e50c292b5f022f29f6f7b2322274b7c245e1db70",
+      "patched": "a013c100d6b16d251f954abd34ac73d19a9a7cdd08bcc949719a974b30618b02"
     },
     "packages/coding-agent/src/modes/interactive/tui-renderer.ts": {
       "original": "a5b0a847dbac31cceac6e3d6d68aaf46404ceca7ad11e716a2386b68f7a249aa",
       "patched": "5f41afaa1a128a5bee6aa2e6d53f61471e6e22fb5b8be08b27df3ef31b0daa5f"
     },
     "packages/coding-agent/src/modes/interactive/components/login-dialog.ts": {
-      "original": "37608848ca7b72707437aed9627a612eadf570c57a54b1c86972c3532918298c",
-      "patched": "4c7584972c24a7c35ad9fedaed31d4844310bc65a58a0c4e894160058c8c0371"
+      "original": "34d9b4e4c2bae7f9b2617143c5b31986809dd59b9b55652aeb8eb8308d4c03fe",
+      "patched": "d3a73325d46dc27a169cd5e3869b31584e448e82b6c6da60cfc9b838fd01df6b"
     },
     "packages/tui/src/components/editor.ts": {
-      "original": "30a47fd49042579be7b85262677df62d4ff37a8f9a3a0e6c41ce3cf1d402b9c3",
-      "patched": "4ec25832b429e112abc28d213c675a116b81c695a32e94d01a4be158212ab686"
+      "original": "48c6a498527df4f645f66574904bdc82c1a4021b29ff81674132219043d4d016",
+      "patched": "0df4798095ca58ab50b84a820c51f2bcf372ca621aebfabd31d7935ba260c734"
     },
     "packages/coding-agent/src/index.ts": {
-      "original": "53f1276c704d1d823d37f2c0b1cfa60daae19b1c220e78d028b863a15f304078",
-      "patched": "fc27dcb2a153baca14f22aa3f2d68c8068f8824b3258bd264f64c85ab6cc12de"
+      "original": "ff0c6959cf2952a575dd5b988b5e8c6a18d4e556993b05dffb768797f3a98b1a",
+      "patched": "c615d7a82cbeeb7b191f2109562d2fec6299805a8eb62733b9d02d9e973630b6"
+    },
+    "packages/coding-agent/src/core/extensions/loader.ts": {
+      "original": "3812b31d73424ab0600fcd25630fabedefa424c4a12dbff6bc88a00b28836b40",
+      "patched": "7195550c3801d2c6b6eb389d06911e224e61a8a037461dab6578a6d1866c1b4e"
     }
+  },
+  "agentRevision": "cothink.2",
+  "jitiPatch": {
+    "package": "jiti",
+    "version": "2.7.0",
+    "revision": "2.7.0-cothink.1",
+    "source": "https://registry.npmjs.org/jiti/-/jiti-2.7.0.tgz",
+    "integrity": "sha512-AC/7JofJvZGrrneWNaEnJeOLUx+JlGt7tNa0wZiRPT4MY1wmfKjt2+6O2p2uz2+skll8OZZmJMNqeke7kKbNgQ==",
+    "license": "MIT",
+    "file": "dist/jiti.cjs",
+    "originalSha256": "a0b3b8d5e06a0519c66b62179e29200533057920f6f11370546e979dacd24c49",
+    "patchedSha256": "6b8028571213f28c2c21433e77ffa412f607c4b6a1577a6e5af0f2cded227278",
+    "before": "!C&&!(w&&n.async)&&(E||w||t.isTransformRe.test(c)||hasESMSyntax(i))",
+    "after": "!C&&!(w&&n.async&&t.opts.moduleCache)&&(E||w||t.isTransformRe.test(c)||hasESMSyntax(i))"
   }
 }

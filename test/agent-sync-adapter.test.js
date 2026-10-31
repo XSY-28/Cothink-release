@@ -36,33 +36,15 @@ test("A01/A08 new history reader uses saved home/backend with no Docker or model
   assert.equal(fact.backend, "agent-sync");
   assert.equal(fact.version, p.version);
 });
-test("A04 unreviewed plugin top-level code is rejected before import and no host side effect occurs", async (t) => {
+test("A04 explicitly selected native code is trusted but does not gain model tools", async (t) => {
   const { writeFileSync, existsSync } = await import("node:fs"),
     { join } = await import("node:path"),
     { createRuntime } = await import("../src/pi-runtime.js");
-  const f = await fixture(t),
-    canary = join(f.home, "must-not-exist"),
-    plugin = join(f.home, "plugin.mjs");
-  writeFileSync(
-    plugin,
-    `import {writeFileSync} from 'node:fs';writeFileSync(${JSON.stringify(canary)},'unsafe');export default function(pi){}`,
-  );
-  let rt;
-  try {
-    await assert.rejects(
-      async () => {
-        rt = await createRuntime({
-          home: f.home,
-          cwd: f.cwd,
-          modelRef: f.models.main,
-          resourceOptions: { additionalExtensionPaths: [plugin] },
-        });
-      },
-      { code: "UNADAPTED_PLUGIN" },
-    );
-  } finally {
-    rt?.dispose();
-  }
-  assert.equal(existsSync(canary), false);
-  assert.equal(f.calls.length, 0);
+  const f = await fixture(t), canary=join(f.home,"native-import"), plugin=join(f.home,"plugin.mjs");
+  writeFileSync(plugin, `import {writeFileSync} from 'node:fs';writeFileSync(${JSON.stringify(canary)},'trusted native import');export default function(pi){}`);
+  const rt=await createRuntime({home:f.home,cwd:f.cwd,modelRef:f.models.main,resourceOptions:{additionalExtensionPaths:[plugin]}});
+  t.after(()=>rt.dispose());
+  assert.equal(existsSync(canary),true);
+  assert.deepEqual(rt.session.getActiveToolNames(),[]);
+  assert.equal(f.calls.length,0);
 });

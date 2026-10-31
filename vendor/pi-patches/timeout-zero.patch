@@ -11,7 +11,7 @@
        ((globalThis as any).ReadableStream && options.body instanceof (globalThis as any).ReadableStream) ||
 --- a/@anthropic-ai/sdk/src/client.ts
 +++ b/@anthropic-ai/sdk/src/client.ts
-@@ -1365,7 +1365,7 @@
+@@ -1371,7 +1371,7 @@
      // once), and each inner-fetch invocation gets its own `ms` timer.
      const baseFetch = this.fetch;
      const timedFetch: Fetch = async (innerUrl, innerInit) => {

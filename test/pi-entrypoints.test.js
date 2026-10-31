@@ -1,3 +1,5 @@
+import {readFileSync,writeFileSync} from "node:fs";
+import {join} from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { fixture } from "./helpers/pi-fixture.js";
@@ -91,4 +93,67 @@ test("CLI announces an explicit output cap and timeout that match the actual pro
   assert.match(run.stderr, /输出额度 99 tokens/);
   assert.match(run.stderr, /模型超时 2000ms/);
   assert.equal(f.calls.length, 1);
+});
+
+test('check-update runs before invalid/legacy model configuration; pure JSON and failure exit codes', async t => {
+  const {mkdtempSync,writeFileSync,readFileSync,rmSync}=await import('node:fs');
+  const {tmpdir}=await import('node:os');
+  const {join,resolve}=await import('node:path');
+  const {spawnSync}=await import('node:child_process');
+  const home=mkdtempSync(join(tmpdir(),'cothink-check-update-'));
+  t.after(()=>rmSync(home,{recursive:true,force:true}));
+  writeFileSync(join(home,'config.json'),'{ broken config');
+  const log=join(home,'requests');
+  const env={...process.env,COTHINK_HOME:home,COTHINK_NO_TTY:'1',PI_OFFLINE:'0',COTHINK_TEST_UPDATE_LOG:log};
+  const run=(args,extra={})=>spawnSync(process.execPath,['--import',resolve('test/helpers/update-fetch.mjs'),resolve('bin/cothink.js'),...args],{env:{...env,...extra},encoding:'utf8',timeout:8000});
+  const ok=run(['check-update','--json']);
+  assert.equal(ok.status,0,ok.stderr);assert.equal(ok.stderr,'');
+  assert.equal(JSON.parse(ok.stdout).status,'available');
+  const failure=run(['check-update','--json'],{COTHINK_TEST_UPDATE_STATUS:'500'});
+  assert.equal(failure.status,1);const s=JSON.parse(failure.stdout);
+  assert.equal(s.status,'unavailable');assert.equal(s.stale,true);
+  const before=readFileSync(log,'utf8');
+  const offline=run(['check-update','--json'],{PI_OFFLINE:'1'});
+  assert.equal(offline.status,1);assert.equal(JSON.parse(offline.stdout).status,'disabled');
+  assert.equal(readFileSync(log,'utf8'),before);
+  for(const args of [['--help'],['history','--json'],['check-update','--help']]) assert.equal(run(args).status,0);
+  assert.equal(readFileSync(log,'utf8'),before);
+});
+
+test('valid ask and pipe/JSON entries never auto-check even with network enabled', async t=>{
+  const f=await fixture(t);
+  const {createTeamConfig}=await import('../src/teams.js');
+  saveConfig(f.home,createTeamConfig({formatVersion:2,...f.models},'Fixture','7c8094cd-3476-4bfa-8f53-055d87972896'));
+  const {spawn}=await import('node:child_process');
+  const {resolve,join}=await import('node:path');
+  const {existsSync}=await import('node:fs');
+  const log=join(f.home,'update-requests');
+  for(const [args,input] of [[['ask','--json','/one question'],''],[['--json'],'/one piped question']]) {
+    const result=await new Promise((yes,no)=>{
+      const c=spawn(process.execPath,['--import',resolve('test/helpers/update-fetch.mjs'),resolve('bin/cothink.js'),...args],{
+        cwd:f.cwd,env:{...process.env,COTHINK_HOME:f.home,COTHINK_NO_TTY:'1',COTHINK_NO_UPDATE_CHECK:'0',PI_OFFLINE:'0',COTHINK_TEST_UPDATE_LOG:log},stdio:['pipe','pipe','pipe']});
+      let out='',err='';c.stdout.on('data',x=>out+=x);c.stderr.on('data',x=>err+=x);c.once('error',no);c.once('close',code=>yes({code,out,err}));c.stdin.end(input);
+    });
+    assert.equal(result.code,0,result.err);assert.equal(JSON.parse(result.out).taskEnd,'completed');
+    assert.equal(existsSync(log),false);assert.equal(existsSync(join(f.home,'update-state.json')),false);
+  }
+  assert.equal(f.calls.length,2);
+});
+
+test('make-html CLI pipe preserves multiline task bytes and uses the same ONE work and final-image gate',async t=>{
+ const f=await fixture(t,(c,n)=>c.body.tools?.some(x=>x.function.name==='submit_visual_review')?tool('submit_visual_review',{verdict:'match',observation:'Blue heading',reasons:'Visible HTML matches the task'}):n===1?tool('write',{path:'index.html',content:'<h1>Blue</h1>'}):n===2?tool('accept_change'):{text:'HTML delivered'});
+ const catalogPath=join(f.home,'pi/models.json'),catalog=JSON.parse(readFileSync(catalogPath));for(const m of catalog.providers.fixture.models)m.input=['text','image'];writeFileSync(catalogPath,JSON.stringify(catalog));
+ const {execution}=await import('./helpers/agent-sync-fixture.js');
+ saveConfig(f.home,{formatVersion:2,...f.models,piResources:{skills:[new URL('./fixtures/visual-skill/SKILL.md',import.meta.url).pathname]},work:{checks:[],execution:{...execution,image:JSON.parse(readFileSync(new URL('../docker/visual-preview-manifest.json',import.meta.url))).image}}});
+ const repo=repository(t),input='  Make HTML\nQuoted commands: /one /make-html\n';const result=await invoke(f,['make-html','--one','--json'],input,repo.project);
+ assert.equal(result.code,0,result.stderr);const saved=JSON.parse(result.stdout);assert.equal(saved.task.input,input);assert.equal(saved.task.mode,'work');assert.equal(saved.taskEnd,'completed');assert.equal(f.calls.length,4);assert.ok(saved.task.work.visualEvidence[0].imageRequestId);
+});
+
+test('actual TUI make-html inherits ONE, then the next plain turn remains ONE answer',async t=>{
+ const f=await fixture(t,(c,n)=>c.body.tools?.some(x=>x.function.name==='submit_visual_review')?tool('submit_visual_review',{verdict:'match',observation:'Blue heading',reasons:'Visible HTML matches the task'}):n===1?tool('write',{path:'index.html',content:'<h1>Blue</h1>'}):n===2?tool('accept_change'):{text:'TUI delivered'});
+ const path=join(f.home,'pi/models.json'),catalog=JSON.parse(readFileSync(path));for(const m of catalog.providers.fixture.models)m.input=['text','image'];writeFileSync(path,JSON.stringify(catalog));
+ const {execution}=await import('./helpers/agent-sync-fixture.js');const {createTeamConfig}=await import('../src/teams.js');
+ saveConfig(f.home,createTeamConfig({formatVersion:2,...f.models,piResources:{skills:[new URL('./fixtures/visual-skill/SKILL.md',import.meta.url).pathname]},work:{checks:[],execution:{...execution,image:JSON.parse(readFileSync(new URL('../docker/visual-preview-manifest.json',import.meta.url))).image}}},'Visual','7c8094cd-3476-4bfa-8f53-055d87972896'));
+ const repo=repository(t);const {execFile}=await import('node:child_process');const {promisify}=await import('node:util');const result=await promisify(execFile)('python3',[new URL('./helpers/visual_pty.py',import.meta.url).pathname,f.home,repo.project,process.env.COTHINK_TEST_CLI??new URL('../bin/cothink.js',import.meta.url).pathname],{timeout:90000,maxBuffer:1024*1024});
+ assert.equal(JSON.parse(result.stdout).secondMode,'answer');assert.equal(f.calls.length,5);assert.ok(f.calls.every(c=>c.body.model==='main'));
 });

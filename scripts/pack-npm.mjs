@@ -17,6 +17,8 @@ const run = (command, args, cwd) => execFileSync(command, args, {
   env: { ...process.env, COPYFILE_DISABLE: '1' },
 });
 try {
+  // Fresh assets are mandatory, including when a previous dist already exists.
+  execFileSync(process.execPath, [npm, 'run', 'build:gui'], { cwd: root, stdio: ['ignore', 2, 2] });
   mkdirSync(output, { recursive: true });
   const [packed] = JSON.parse(run(process.execPath,
     [npm, 'pack', '--ignore-scripts', '--json', '--pack-destination', scratch], root));

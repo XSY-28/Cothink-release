@@ -45,3 +45,10 @@ export async function validateModelThinking(model, level) {
   if (level !== undefined && !supported.includes(level)) throw new Error(`${model.provider}/${model.id} 不支持思考档位 ${level}；可用：${supported.join(', ')}。`);
   return supported;
 }
+
+/** Preserve explicit choices; never let the SDK silently clamp our default. */
+export async function resolveModelThinking(model, explicit) {
+  const level = explicit ?? (model.reasoning ? DEFAULT_THINKING_LEVEL : 'off');
+  await validateModelThinking(model, level);
+  return level;
+}

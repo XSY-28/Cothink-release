@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>视觉盲选</title>
+    <link rel="stylesheet" href="/viewer.css" />
+    <script src="/viewer.js" defer></script>
+  </head>
+  <body>
+    <header>
+      <div>
+        <p class="eyebrow">VISUAL BENCH</p>
+        <h1>让作品说话</h1>
+        <p>先看对象与关系，再看动态表现。每题的顺序独立打乱，选择自动保存。</p>
+      </div>
+      <button id="reveal">完成选择，揭晓模型</button>
+    </header>
+    <p id="artifactNotice"></p>
+    <main id="questions"></main>
+    <p id="message" role="status"></p>
+    <section id="report" hidden>
+      <h2>揭晓结果</h2>
+      <div id="results"></div>
+      <button id="export">导出报告</button>
+    </section>
+    <dialog id="zoom">
+      <button id="closeZoom">关闭放大</button>
+      <div id="zoomContent"></div>
+    </dialog>
+  </body>
+</html>

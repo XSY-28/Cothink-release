@@ -1,15 +1,28 @@
+import { createPreviewTool } from "./visual-preview.js";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Type } from "typebox";
-import { createVersioning, inScope } from "./versioning.js";
+import { createVersioning, inScope, withChangeQueue } from "./versioning.js";
+import { createPluginWork } from "./plugin-work.js";
 import { workspaceTools } from "./workspaces.js";
 import { createRuntime, selectedResources } from "./pi-runtime.js";
-import { renderAnswerSkills } from "./context.js";
+import { renderAnswerSkills, buildMemberTaskMaterial } from "./context.js";
 import { problem } from "./task.js";
+import { DEFAULT_THINKING_LEVEL } from "./thinking.js";
 const prompt = (n) =>
   readFileSync(new URL(`../prompts/${n}.md`, import.meta.url), "utf8");
 const modelName = (m) => m.provider + "/" + m.modelId;
+// Provider identity is not model identity. Strip only recognized vendor namespaces;
+// arbitrary custom IDs/remappings remain opaque, and versions are never guessed.
+export const workModelIdentity = (m) => {
+  const id = m.modelId.replace(/^(?:openai|anthropic|deepseek|moonshotai|moonshot)\//, "");
+  if (id === "k3.1-pro") return "kimi-k3.1-pro";
+  if (id === "anthropic.claude-opus-5-5") return "claude-opus-5-5";
+  if (id === "claude-opus-5.5") return "claude-opus-5-5";
+  if (id === "deepseek-v4.1-flash1017") return "deepseek-v4.1-flash-1017";
+  return id;
+};
 const text = (data) => ({
   content: [{ type: "text", text: JSON.stringify(data) }],
 });
@@ -30,12 +43,19 @@ export async function runWork({
   onProgress = () => {},
   maxOutputTokens,
   timeout,
+  initialMaterial,
 }) {
-  const available = [
-    config.main,
-    ...(task.record.singleModel ? [] : config.secondary),
-  ].filter(
-    (m, i, all) => all.findIndex((x) => modelName(x) === modelName(m)) === i,
+  if (
+    task.workModelAllowlist !== undefined &&
+    (!Array.isArray(task.workModelAllowlist) ||
+      task.workModelAllowlist.some((identity) => typeof identity !== "string"))
+  )
+    throw problem("MODEL_UNAVAILABLE", "工作模型允许列表必须是身份数组。");
+  const available = (task.record.singleModel ? [] : config.secondary).filter(
+    (m) =>
+      workModelIdentity(m) !== workModelIdentity(config.main) &&
+      (task.workModelAllowlist === undefined ||
+        task.workModelAllowlist.includes(modelName(m))),
   );
   let checks = config.work?.checks;
   if (checks === undefined) {
@@ -59,6 +79,8 @@ export async function runWork({
     runtimes = new Set(),
     listeners = new Set();
   let v,
+    executionError,
+    pluginWork,
     leader,
     mainBinding,
     active = 0,
@@ -153,6 +175,26 @@ export async function runWork({
       );
     return m;
   }
+  function assertModelFree(model, self = null) {
+    const occupied = [...members.values()].find(
+      (m) =>
+        m !== self &&
+        workModelIdentity(m.record.model) === workModelIdentity(model) &&
+        (unknownModel(m) ||
+          m.binding?.unknownOperation ||
+          m.record.kernelUnknownRequestId ||
+          m.record.status === "outcome_unknown" ||
+          (!["accepted", "abandoned"].includes(m.record.status) &&
+            !(m.record.status === "completed" &&
+              m.record.collected &&
+              (m.record.readOnly || m.record.noChange)))),
+    );
+    if (occupied)
+      throw problem(
+        "MEMBER_BUSY",
+        `模型已有未处理成员 memberId=${occupied.record.memberId}，status=${occupied.record.status}；collect已有成员，检查未知requestId或给出具体feedback；勿新建副本。`,
+      );
+  }
   async function invoke(action, input, fn) {
     guard();
     const id = input.requestId ?? randomUUID();
@@ -172,7 +214,12 @@ export async function runWork({
     const started = performance.now(),
       before = observerErrors.length;
     try {
-      let result = await fn(id);
+      const coordinated = input.changeId && ["prepareChange", "acceptChange", "refreshChange"].includes(action);
+      let result = coordinated ? await withChangeQueue(v, input.changeId, () => {
+        guard();
+        pluginWork?.assertHandled(input.changeId);
+        return fn(id);
+      }) : await fn(id);
       if (observerErrors.length > before && action === "acceptChange")
         result = {
           status: "unknown",
@@ -225,8 +272,13 @@ export async function runWork({
       );
     return syncChange(c);
   }
-  async function abandon(c, reason) {
-    const result = await invoke(
+  async function abandon(c, reason, { queueHeld = false } = {}) {
+    const perform=async()=>{
+      guard();
+      const actor=mainBinding?.current.changeId===c.changeId?mainBinding:[...members.values()].find(m=>m.binding?.current.changeId===c.changeId)?.binding;
+      if(c.status==="outcome_unknown"||actor?.unknownOperation)throw problem("OPERATION_UNKNOWN","Resolve the original operation ID before abandoning this change");
+      pluginWork?.assertHandled(c.changeId);
+      const result = await invoke(
       "abandonChange",
       { changeId: c.changeId },
       (id) => v.abandonChange(c.changeId, { requestId: id }),
@@ -235,7 +287,9 @@ export async function runWork({
       abandonReason: reason,
     });
     notify(true);
-    return result;
+      return result;
+    };
+    return queueHeld?perform():withChangeQueue(v,c.changeId,perform);
   }
   function currentRequest(actor) {
     return task.requests().findLast((r) => r.role === actor.role && r.sent);
@@ -349,6 +403,7 @@ export async function runWork({
         "SCOPE_REQUIRED",
         "Shell需要明确范围；使用next_change/refresh_change说明scope。",
       );
+    pluginWork?.assertHandled(old.changeId);
     const c = await begin(
       "main",
       [path],
@@ -359,7 +414,8 @@ export async function runWork({
     if (c.status === "blocked")
       throw problem("SCOPE_BLOCKED", JSON.stringify(c));
     const delta = await observedDelta(mainBinding, c);
-    await abandon(old, "观察已转换为明确的单文件写意图");
+    // ensureMainWrite is invoked by workspaceTools while this old change queue is held.
+    await abandon(old, "观察已转换为明确的单文件写意图", {queueHeld:true});
     mainBinding.current = c;
     if (delta) {
       const feedback = markRefresh(mainBinding, delta);
@@ -369,6 +425,7 @@ export async function runWork({
   }
   async function prepare(actor, check = false) {
     const c = actor.current;
+    pluginWork?.assertHandled(c.changeId);
     if (c.status === "outcome_unknown" || actor.unknownOperation)
       throw problem("OPERATION_UNKNOWN", "未知结果只能查询已有ID。");
     const r = await invoke("prepareChange", { changeId: c.changeId }, (id) =>
@@ -443,7 +500,7 @@ export async function runWork({
             m.binding.current.actor,
             intent.scope,
             intent.readScope,
-            m.record.task,
+            m.record.assignment,
             intent.kind === "observe",
             {
               requestId: intent.requestId,
@@ -517,7 +574,7 @@ export async function runWork({
           "member:" + m.record.memberId,
           m.record.scope,
           m.record.readScope,
-          m.record.task,
+          m.record.assignment,
           m.record.readOnly,
           {
             requestId: m.beginId,
@@ -554,14 +611,10 @@ export async function runWork({
       m.record.baseVersion = m.binding.current.baseVersion;
       m.record.workspace = m.binding.current.workspace;
       save();
-      m.stage = task.beginPhase(
-        m.feedback ? "worker-feedback" : "worker",
-        m.binding.role,
-        m.record.model,
-      );
       if (!m.runtime) {
         const defs = workspaceTools({
           task,
+          visualPreview: task.record.workRequest?.kind === "html-svg",
           stage: () => m.stage,
           versioning: v,
           binding: m.binding,
@@ -572,6 +625,8 @@ export async function runWork({
           },
           assertOwned: () => {
             guard();
+            if (m.conflictHalted)
+              throw problem("TASK_CONFLICT", "Member execution stopped after reporting a task conflict; preserve the draft and provide concrete feedback.");
             if (m.controller.signal.aborted)
               throw problem("CANCELLED", "成员取消");
             if (!refreshReady(m.binding))
@@ -582,17 +637,55 @@ export async function runWork({
           },
           onProgress,
         });
+        defs.push(...pluginWork.tools({actor: "member:"+m.record.memberId,binding:m.binding,model:m.record.model,signal:m.controller.signal,getModelContract:(provider,id)=>leader.modelRuntime.getModel(provider,id),getPricing:()=>leader.modelRuntime.getModel(m.record.model.provider,m.record.model.modelId)?.cost,
+          assertAllowed:()=>{guard();if(m.controller.signal.aborted)throw problem("CANCELLED","Member no longer permits helpers");if(m.conflictHalted || m.resolvingConflict || !m.record.understandingCallId)
+            throw problem("TASK_CONFLICT", "Helper tools require completed independent preparation and no unresolved conflict");}}));
+        defs.push({
+          name: "report_task_conflict",
+          label: "report_task_conflict",
+          description: "Report a conflict between the original user task and delegated instructions. Execution stops and the draft is preserved. After concrete feedback, resolved=true confirms your own consistent understanding; only a successful confirmation request can clear the conflict.",
+          parameters: Type.Object({
+            message: Type.String({ description: "Specific conflict or resolution reasons, quoting the relevant source text." }),
+            resolved: Type.Optional(Type.Boolean({ description: "Confirm resolution during a later feedback request; defaults to false." })),
+          }),
+          async execute(id, args) {
+            guard();
+            if (m.controller.signal.aborted) throw problem("CANCELLED", "Member was cancelled.");
+            if (!args.message.trim()) throw problem("TASK_CONFLICT", "A specific conflict or resolution explanation is required.");
+            const requestId = currentRequest(m.binding)?.id;
+            if (args.resolved) {
+              if (!m.resolvingConflict || !m.record.taskConflict?.unresolved || m.conflictHalted)
+                throw problem("TASK_CONFLICT", "Resolution is allowed only after concrete feedback in a subsequent member request.");
+              m.pendingResolution = { message: args.message, requestId };
+            } else {
+              const previous = m.record.taskConflict;
+              m.record.taskConflict = { message: args.message, requestId, unresolved: true,
+                ...(previous ? { previous } : {}) };
+              m.pendingResolution = null;
+              m.conflictHalted = true;
+            }
+            // End the current tool turn without aborting a completed provider request.
+            m.record.tools = ["read", "grep", "find", "ls", "report_task_conflict"];
+            m.runtime.setToolNames(m.record.tools);
+            m.runtime.stopAfterTurn();
+            save();
+            return text({ status: args.resolved ? "resolution_pending_request_completion" : "task_conflict", message: args.message });
+          },
+        });
+        m.toolNames = defs.map(d => d.name);
         m.runtime = await createRuntime({
           home,
           cwd: m.binding.current.workspace,
           modelRef: m.record.model,
           role: "member-" + m.record.memberId,
           packageSnapshot: task.packageSnapshot,
+          useFrozenSkills: true,
+          uiContext:task.extensionUI,
+          uiMode:task.extensionMode,
+          nativeContext: await pluginWork.context({actor:"member:"+m.record.memberId,binding:m.binding,signal:m.controller.signal,assertAllowed:()=>{guard();if(m.controller.signal.aborted)throw problem("CANCELLED","Native plugin owner stopped");}}),
           resourceOptions: { ...task.resourceOptions, systemPrompt: prompt("worker") },
           toolDefinitions: defs,
-          activeToolNames: m.record.readOnly
-            ? ["read", "grep", "find", "ls"]
-            : defs.map((d) => d.name),
+          activeToolNames: ["read", "grep", "find", "ls"],
           maxOutputTokens,
           timeout,
         });
@@ -600,18 +693,87 @@ export async function runWork({
       }
       guard();
       if (m.controller.signal.aborted) throw problem("CANCELLED", "成员取消");
-      m.runtime.setToolNames(
-        m.record.readOnly
-          ? ["read", "grep", "find", "ls"]
-          : ["read", "grep", "find", "ls", "write", "edit", "bash"],
-      );
+      const readTools = ["read", "grep", "find", "ls"];
+      const executionInfo = {
+        readOnly: m.binding.current.readOnly,
+        scope: m.binding.current.scope,
+        readScope: m.binding.current.readScope,
+        checks,
+        execution: work.execution ? {
+          engine: work.execution.engine,
+          image: work.execution.image,
+          network: work.execution.network,
+          limits: work.execution.limits,
+          artifactPaths: work.execution.artifactPaths,
+        } : null,
+      };
+      const material = (preparation, tools) => buildMemberTaskMaterial({
+        originalTask: task.record.input,
+        assignment: m.record.assignment,
+        implementationAdvice: m.record.implementationAdvice,
+        reason: m.record.reason,
+        execution: executionInfo, tools, preparation,
+        answerSkills: task.answerSkills ?? [],
+        feedback: m.feedback, refresh: m.binding.refreshInput,
+        taskConflict: m.record.taskConflict?.unresolved ? m.record.taskConflict : undefined,
+      });
+      if (!m.record.understandingCallId) {
+        // An explicit feedback turn cannot replay a failed/unknown preparation.
+        if (m.record.preparationStarted)
+          throw problem("PREPARATION_FAILED", "Preparation did not complete; it is not automatically replayed.");
+        m.record.preparationStarted = true;
+        m.stage = task.beginPhase("worker-prepare", m.binding.role, m.record.model);
+        m.runtime.setToolNames(readTools);
+        m.runtime.bindTask(task, m.stage);
+        m.record.sessionFile = m.runtime.sessionManager.getSessionFile();
+        save();
+        const understanding = await m.runtime.prompt(material(true, readTools), { custom: "cothink-member-preparation" });
+        guard();
+        if (m.controller.signal.aborted) throw problem("CANCELLED", "Member preparation was cancelled.");
+        if (understanding.message?.stopReason !== "stop" || !understanding.text.trim())
+          throw problem("PREPARATION_FAILED", "Preparation needs a complete, nonempty understanding before implementation.");
+        m.record.understanding = understanding.text;
+        m.record.understandingCallId = understanding.call.id;
+        save();
+      }
+      const activeTools = m.binding.current.readOnly ? [...readTools, "report_task_conflict"] : m.toolNames;
+      m.record.tools = activeTools;
+      m.conflictHalted = false;
+      if (m.record.taskConflict?.unresolved) {
+        m.resolvingConflict = true;
+        m.pendingResolution = null;
+        const confirmationTools = [...readTools, "report_task_conflict"];
+        m.stage = task.beginPhase("worker-conflict-resolution", m.binding.role, m.record.model);
+        m.record.tools = confirmationTools;
+        m.runtime.setToolNames(confirmationTools);
+        m.runtime.bindTask(task, m.stage);
+        try {
+          m.result = await m.runtime.prompt(material(false, confirmationTools), { custom: "cothink-conflict-correction" });
+          guard();
+          if (m.controller.signal.aborted) throw problem("CANCELLED", "Conflict confirmation was cancelled.");
+          const resolution = m.pendingResolution;
+          if (!resolution || m.conflictHalted ||
+              !task.requests().some(r => r.id === resolution.requestId && r.status === "completed"))
+            throw problem("TASK_CONFLICT", "The member has not confirmed resolution of the task conflict.");
+          Object.assign(m.record.taskConflict, { unresolved: false,
+            resolution: resolution.message, resolutionRequestId: resolution.requestId });
+          save();
+        } finally {
+          m.resolvingConflict = false;
+          m.pendingResolution = null;
+        }
+      }
+      m.record.tools = activeTools;
+      m.stage = task.beginPhase(m.feedback ? "worker-feedback" : "worker", m.binding.role, m.record.model);
+      m.runtime.setToolNames(activeTools);
       m.runtime.bindTask(task, m.stage);
       m.record.sessionFile = m.runtime.sessionManager.getSessionFile();
       save();
-      const user = `原始用户任务：\n${task.record.input}\n任务：${m.record.task}\n材料与验收：${m.record.materials}\n实际输入版本：${m.binding.current.baseVersion}；源码投影：${m.binding.current.workspace}\n${m.feedback ? "针对已有成果的具体反馈（同一草稿，不是原样重发）：\n" + m.feedback : ""}\n${m.binding.refreshInput ? JSON.stringify(m.binding.refreshInput) : ""}\n${renderAnswerSkills(task.answerSkills ?? [])}`;
-      m.result = await m.runtime.prompt(user);
+      m.result = await m.runtime.prompt(material(false, activeTools), { custom: "cothink-member-assignment" });
       guard();
-      if (m.controller.signal.aborted) throw problem("CANCELLED", "成员已取消");
+      if (m.controller.signal.aborted) throw problem("CANCELLED", "Member was cancelled.");
+      if (m.record.taskConflict?.unresolved)
+        throw problem("TASK_CONFLICT", "The member reported an unresolved task conflict; preserve the draft and provide concrete correction or request user clarification.");
       refreshReady(m.binding);
       if (m.binding.failedMutations?.size)
         throw problem(
@@ -631,6 +793,8 @@ export async function runWork({
         }
       } else await abandon(m.binding.current, "只读调查完成");
       m.record.status = "completed";
+      delete m.record.error;
+      delete m.record.errorCode;
       m.record.callId = m.result.call.id;
     } catch (e) {
       if (e.code === "OPERATION_UNKNOWN")
@@ -645,6 +809,7 @@ export async function runWork({
               ? "outcome_unknown"
               : "failed";
       m.record.error = e.message;
+      m.record.errorCode = e.code ?? "ERROR";
     } finally {
       active--;
       m.attempt = null;
@@ -684,7 +849,25 @@ export async function runWork({
       },
     });
   }
-  const summary = (m) => ({ ...m.record, result: m.result?.text ?? null });
+  const summary = (m) => {
+    const previews = (work.visualEvidence ?? []).filter(e => e.actor === m.binding?.role);
+    const requests = task.requests();
+    return { ...m.record, result: m.result?.text ?? null,
+      capabilities: { source: "Host-registered member tools", registeredTools: m.toolNames ?? [], activeTools: m.record.tools ?? [] },
+      preview: { source: "Host-recorded previews; acceptance is version storage, not semantic proof",
+        successful: previews.filter(e => e.result === "captured").length,
+        failed: previews.filter(e => e.result === "failed").length,
+        evidence: previews.map(e => ({
+          result: e.result, entry: e.entry, sourceVersion: e.sourceVersion, privateVersion: e.privateVersion,
+          candidateVersion: m.record.candidateVersion ?? null,
+          currentCandidate: e.privateVersion === m.binding?.current.privateVersion,
+          imageRequestId: e.imageRequestId,
+          imageRequestCompleted: !!e.imageRequestId && requests.some(r => r.id === e.imageRequestId && r.status === "completed"),
+          screenshots: e.images.map((i,index) => ({ outputRef: e.outputRef, index, sha256: i.sha256, capturedAtMs: i.capturedAtMs })),
+        })),
+      },
+    };
+  };
   function hasReady(m) {
     return ["completed", "failed", "outcome_unknown", "cancelled"].includes(
       m.record.status,
@@ -718,56 +901,38 @@ export async function runWork({
   if (!task.record.singleModel)
     register(
       "delegate",
-      "主模型选择冻结列表中的模型和实际写范围；容量/范围满足后才运行。",
+      "Assign a bounded responsibility to an eligible model. The host supplies the original user task; assignment and implementationAdvice cannot override it. Legacy task/materials parameters are rejected.",
       {
-        model: Type.String(),
-        task: Type.String(),
-        materials: Type.String(),
-        reason: Type.String(),
-        scope: Type.Array(Type.String()),
+        model: Type.String({ description: "Exact eligible model identity." }),
+        assignment: Type.String({ description: "Member responsibility, subordinate to the original task." }),
+        implementationAdvice: Type.Optional(Type.String({ description: "Optional leader suggestions or hypotheses, not user requirements." })),
+        reason: Type.String({ description: "Reason for selecting this executor." }),
+        scope: Type.Optional(Type.Array(Type.String())),
         readScope: Type.Optional(Type.Array(Type.String())),
         readOnly: Type.Optional(Type.Boolean()),
         dependsOn: Type.Optional(Type.Array(Type.String())),
       },
       async (args) => {
-        if (!args.task.trim() || !args.reason.trim() || !args.materials.trim())
-          throw Error("任务、材料和理由不能为空");
+        if ("task" in args || "materials" in args)
+          throw problem("DELEGATE_INPUT", "Legacy task/materials are not supported. Use assignment and optional implementationAdvice; the host supplies the original task.");
+        if (!args.assignment.trim() || !args.reason.trim())
+          throw problem("DELEGATE_INPUT", "Assignment and selection reason must not be empty.");
         for (const id of args.dependsOn ?? [])
           if (selected(id).record.status !== "accepted")
             throw problem("DEPENDENCY", "依赖尚未正式接纳：" + id);
-        for (const m of members.values())
-          if (
-            m.record.task === args.task &&
-            modelName(m.record.model) === args.model
-          ) {
-            if (
-              unknownModel(m) ||
-              m.binding?.unknownOperation ||
-              m.record.kernelUnknownRequestId
-            )
-              throw problem(
-                "OPERATION_UNKNOWN",
-                "此前同任务未知，不能用新委派绕过。",
-              );
-            if (
-              m.record.materials === args.materials &&
-              JSON.stringify(m.record.scope) === JSON.stringify(args.scope)
-            )
-              throw problem(
-                "DUPLICATE_TASK",
-                "不要原样重派；collect或给出具体feedback。",
-              );
-          }
+        const model = choose(args.model);
+        if(task.record.workRequest && !args.readOnly && !leader.modelRuntime.getModel(model.provider,model.modelId)?.input?.includes("image")) throw problem("VISUAL_MODEL","制作执行成员必须支持图像；不降级成文字检查。");
+        assertModelFree(model);
         const record = {
           memberId: randomUUID(),
-          model: choose(args.model),
-          task: args.task,
-          materials: args.materials,
+          model,
+          assignment: args.assignment,
+          implementationAdvice: args.implementationAdvice ?? "",
           reason: args.reason,
-          scope: args.scope,
+          scope: args.scope ?? [],
           readScope:
             args.readScope ??
-            (args.readOnly && args.scope.length ? args.scope : ["."]),
+            (args.readOnly && args.scope?.length ? args.scope : ["."]),
           readOnly: args.readOnly ?? false,
           dependsOn: args.dependsOn ?? [],
           status: "queued",
@@ -777,6 +942,7 @@ export async function runWork({
         m.controller.signal.addEventListener(
           "abort",
           () => {
+            void pluginWork?.stopActor?.("member:"+m.record.memberId).catch(error=>{m.record.stopError=error.message;save();});
             void m.runtime?.session.abort();
             if (!m.attempt) finishPromise(m);
           },
@@ -792,7 +958,7 @@ export async function runWork({
     );
   register(
     "collect",
-    "有可处理成果即返回；相关候选阻塞时返回该候选；实际循环等待会明确拒绝。",
+    "Collect stopped member results, conflicts and host-recorded tool/preview evidence. Returns a ready blocking candidate when relevant; rejects a dependency cycle. Image delivery is not semantic proof.",
     { memberId: Type.Optional(Type.String()) },
     async (args) => {
       const targets = args.memberId
@@ -835,7 +1001,7 @@ export async function runWork({
           if (cycle)
             throw problem(
               "WOULD_DEADLOCK",
-              "成员正在等待领导的写范围；请先处理自己的草稿：" +
+              "A member is waiting for the leader's write scope; handle your own draft first: " +
                 JSON.stringify(cycle),
             );
           await waitChange(seen);
@@ -966,13 +1132,16 @@ export async function runWork({
   );
   register(
     "accept_change",
-    "审阅当前内容后接纳；宿主自动固定候选并检查最新组合。未展示Shell变化会先返回diff。",
+    "Accept reviewed content after host candidate and latest-combination checks. Unresolved task conflicts block acceptance. Unseen Shell changes return a diff first; acceptance is not semantic or visual proof.",
     { memberId: Type.Optional(Type.String()) },
     async (args) => {
       const m = args.memberId ? selected(args.memberId) : null,
         actor = m?.binding ?? mainBinding;
+      if (m?.record.taskConflict?.unresolved)
+        throw problem("TASK_CONFLICT", "Cannot accept a member draft with an unresolved task conflict. Send concrete corrective feedback; only the member can confirm resolution.");
       if (!actor) throw problem("MEMBER", "成员尚未获权");
       const c = actor.current;
+      pluginWork?.assertHandled(c.changeId);
       if (m && m.record.status === "accepted") return m.record.acceptance;
       if (m && m.record.status !== "completed")
         throw problem("MEMBER_BUSY", "先collect等待成员明确停止");
@@ -1045,7 +1214,7 @@ export async function runWork({
   );
   register(
     "feedback",
-    "针对未接纳草稿原地修订；只有接纳后的新工作才新开修改。",
+    "Send specific corrective feedback on the same unaccepted draft. A task conflict requires the same member to confirm the correction before writes resume. Only new work after acceptance starts a new change.",
     {
       memberId: Type.String(),
       feedback: Type.String(),
@@ -1062,7 +1231,12 @@ export async function runWork({
         m.binding?.unknownOperation
       )
         throw problem("MEMBER_BUSY", "成员必须已明确停止且无未知请求");
-      if (args.model) m.record.model = choose(args.model);
+      const nextModel = choose(args.model ?? modelName(m.record.model));
+      if (m.record.taskConflict?.unresolved && modelName(nextModel) !== modelName(m.record.model))
+        throw problem("TASK_CONFLICT", "The member that reported the conflict must receive and confirm the correction; changing model cannot clear it.");
+      assertModelFree(nextModel, m);
+      // Validate before changing the draft, identity, or queued state.
+      m.record.model = nextModel;
       if (m.record.status === "accepted" || m.record.noChange) {
         m.record.previousChanges ??= [];
         m.record.previousChanges.push(m.binding.current.changeId);
@@ -1194,6 +1368,8 @@ export async function runWork({
       m.record.abandonReason = args.reason;
       save();
       m.controller.abort();
+      try {await pluginWork?.stopActor?.("member:"+m.record.memberId,{reason:args.reason});}
+      catch(error){m.record.status="outcome_unknown";m.record.stopError=error.message;save();throw error;}
       await m.promise;
       if (m.binding) await abandon(m.binding.current, args.reason);
       notify(true);
@@ -1260,6 +1436,89 @@ export async function runWork({
       return c;
     },
   );
+  async function reviewVisual(material, evidence) {
+    if (task.requests().some(r => r.sent && ["in_flight", "outcome_unknown"].includes(r.status)) ||
+        [...members.values()].some(m => m.attempt || m.binding?.unknownOperation || m.record.kernelUnknownRequestId))
+      throw problem("VISUAL_BUSY", "Independent visual review requires the leader and members to have no in-flight or unknown requests.");
+    const review = evidence.review = {
+      verdict: "uncertain", status: "running", observation: "", reasons: "",
+      integrationVersion: evidence.integrationVersion,
+      imageHashes: evidence.images.map(i => i.sha256), model: { ...config.main }, requestId: null,
+    };
+    const reviewStage = task.beginPhase("visual-review", "main", config.main);
+    let runtime, submitted = false;
+    try {
+      runtime = await createRuntime({
+        home, cwd: mainBinding.current.workspace, modelRef: config.main,
+        role: "visual-review-" + task.record.id + "-" + reviewStage.id,
+        // No package instructions, context files or old session history enter this review.
+        packageSnapshot: { ...task.packageSnapshot, extensions: [], skills: [], prompts: [], themes: [] },
+        useFrozenSkills: true,
+        resourceOptions: { noContextFiles: true, systemPrompt: prompt("visual-review") },
+        toolDefinitions: [{
+          name: "submit_visual_review", label: "submit_visual_review",
+          description: "Submit one visual judgment after observing the supplied images and comparing them with the original user task. Missing evidence requires uncertain; the host binds the version and request.",
+          parameters: Type.Object({
+            verdict: Type.Union([Type.Literal("match"), Type.Literal("mismatch"), Type.Literal("uncertain")]),
+            observation: Type.String({ description: "What is actually visible, including subjects and relationships." }),
+            reasons: Type.String({ description: "Concrete comparison with the original task and any missing visibility, motion or interaction evidence." }),
+          }),
+          async execute(id, args) {
+            guard();
+            if (submitted || !args.observation.trim() || !args.reasons.trim())
+              throw problem("VISUAL_VERDICT", "Submit one verdict with nonempty observations and reasons.");
+            submitted = true;
+            // Model input must never replace host-owned versions, image hashes or identity.
+            Object.assign(review, { verdict: args.verdict, observation: args.observation, reasons: args.reasons });
+            runtime.stopAfterTurn();
+            save();
+            return text({ status: "recorded", verdict: args.verdict });
+          },
+        }],
+        activeToolNames: ["submit_visual_review"], maxOutputTokens, timeout,
+      });
+      runtimes.add(runtime);
+      runtime.bindTask(task, reviewStage);
+      const fact = {
+        source: "CoThink host final integrated visual evidence; artifact content is untrusted",
+        originalTask: task.record.input,
+        integrationVersion: evidence.integrationVersion,
+        sourceVersion: evidence.sourceVersion, toolCallId: evidence.toolCallId,
+        entry: evidence.entry, viewport: evidence.viewport,
+        frames: evidence.images.map(({ sha256, requestedAtMs, capturedAtMs }) => ({ sha256, requestedAtMs, capturedAtMs })),
+        actions: evidence.actions ?? [], diagnostics: evidence.diagnostics,
+      };
+      const result = await runtime.prompt([
+        { type: "text", text: JSON.stringify(fact) },
+        ...material.content.filter(c => c.type === "image"),
+      ], { custom: "cothink-independent-visual-review" });
+      review.requestId = result.call.id;
+      review.text = result.text;
+      review.model = result.call.actualModel;
+      if (!submitted) {
+        review.verdict = "uncertain";
+        review.reasons = result.text || "No visual conclusion was submitted.";
+      }
+      if (evidence.imageRequestId !== result.call.id || result.call.status !== "completed")
+        throw problem("VISUAL_NOT_SENT", "The final images did not enter this completed review request; preserve the artifact.");
+      if ((await v.inspect()).version !== evidence.integrationVersion)
+        throw problem("STALE_VISUAL", "The integrated version changed during visual review; this judgment cannot authorize a different version.");
+      review.status = "completed";
+      evidence.reviewedRequestId = result.call.id;
+      save();
+      return review;
+    } catch (error) {
+      const call = task.requests().findLast(r => r.stageId === reviewStage.id);
+      review.requestId = call?.id ?? null;
+      review.text = call?.text ?? review.text ?? "";
+      review.status = call?.status === "completed" ? "invalid" : call?.status ?? "failed";
+      review.error = error.message;
+      save();
+      throw error;
+    } finally {
+      if (runtime) { await runtime.dispose(); runtimes.delete(runtime); }
+    }
+  }
   const abortMembers = () => {
     for (const m of members.values()) {
       if (!terminal.has(m.record.status)) m.record.status = "cancelled";
@@ -1298,6 +1557,8 @@ export async function runWork({
         ),
       ).version,
     });
+    work.startVersion = work.version;
+    pluginWork = await createPluginWork({task,versioning:v,execution:work.execution,maxOutputTokens,remoteMachines:config.work?.remoteMachines});
     task.record.members = [];
     save();
     await acquireLeader();
@@ -1309,6 +1570,7 @@ export async function runWork({
         task.record.input,
         !intent.scope?.length,
       );
+    work.startVersion = initial.baseVersion ?? work.startVersion;
     if (initial.status === "blocked")
       throw problem("SCOPE_BLOCKED", JSON.stringify(initial));
     mainBinding = binding(initial, "main", work);
@@ -1319,14 +1581,21 @@ export async function runWork({
       modelRef: config.main,
       role: "leader-" + task.record.id,
       packageSnapshot: task.packageSnapshot,
+      useFrozenSkills: true,
+      uiContext:task.extensionUI,
+          uiMode:task.extensionMode,
+      nativeContext: await pluginWork.context({actor:"main",binding:mainBinding,assertAllowed:guard}),
       resourceOptions: {
         ...(task.resourceOptions ?? selectedResources(config, cwd)),
-        systemPrompt: prompt("leader"),
+        systemPrompt: prompt("leader") + "\n\n" + (task.record.singleModel
+          ? "This task uses ONE single-model work mode at the Team layer. You are the sole Team owner; formal secondary member delegation is unavailable. Installed managed plugin helpers may assist unless the user disabled them. Review helper results and perform final checks and delivery yourself. Any host-required visual review uses this same main model."
+          : prompt("leader-cothink")),
       },
       extraToolNames: config.piResources?.tools ?? [],
       toolDefinitions: [
         ...workspaceTools({
           task,
+          visualPreview: task.record.workRequest?.kind === "html-svg",
           stage,
           versioning: v,
           binding: mainBinding,
@@ -1339,27 +1608,35 @@ export async function runWork({
           onProgress,
         }),
         ...tools,
+        ...pluginWork.tools({actor:"main",binding:mainBinding,model:config.main,assertAllowed:guard,getModelContract:(provider,id)=>leader.modelRuntime.getModel(provider,id),getPricing:()=>leader.modelRuntime.getModel(config.main.provider,config.main.modelId)?.cost}),
       ],
       maxOutputTokens,
       timeout,
     });
     runtimes.add(leader);
     leader.bindTask(task, stage);
-    const modelFacts = available.map((m) => {
+    const modelFact = (m) => {
       const model = leader.modelRuntime.getModel(m.provider, m.modelId);
       return {
         identity: modelName(m),
+        actualModelIdentity: workModelIdentity(m),
         input: model?.input,
         reasoning: model?.reasoning,
-        thinkingLevel: m.thinkingLevel ?? "off",
+        contextWindow: model?.contextWindow,
+        maxTokens: model?.maxTokens,
+        thinkingLevel: m.thinkingLevel ?? (model?.reasoning ? DEFAULT_THINKING_LEVEL : null),
+        thinkingSetting: m.thinkingLevel === undefined ? (model?.reasoning ? `Host default ${DEFAULT_THINKING_LEVEL}` : "Reasoning is not enabled for this model") : "Effective setting for this task",
       };
-    });
-    const initialMaterial = task.requests().find((r) => r.phase === "draft")
+    };
+    initialMaterial ??= task.requests().find((r) => r.phase === "draft")
       ?.context?.messages;
-    const result = await leader.prompt(
-      `用户任务：\n${task.record.input}\n初始冻结材料：${JSON.stringify(initialMaterial ?? [])}\n可用模型（具体专长未知，按任务判断）：${JSON.stringify(modelFacts)}\n本条singleModel=${task.record.singleModel}，容量2（领导占一席，collect时释放）；maxCalls=null。\n实际输入版本=${initial.baseVersion}，源码投影=${initial.workspace}，只读观察=${initial.readOnly}；已知写范围=${JSON.stringify(initial.scope)}\n原目录=${v.root}（未提交内容不属于正式起点；不自动覆盖原目录）。\n执行能力=${JSON.stringify(work.execution)}；完整Shell为Linux隔离环境，未配置/不可用时不能使用宿主替代。固定检查=${JSON.stringify(checks)}，空策略未验证。\n${renderAnswerSkills(task.answerSkills ?? [])}`,
+    let result = await leader.prompt(
+      `Original user task:\n${task.record.input}\nFrozen initial material: ${JSON.stringify(initialMaterial ?? [])}\nLeader identity and catalog facts: ${JSON.stringify(modelFact(config.main))}\nEligible secondary models (matching actualModelIdentity values are aliases of one model, not independent experts): ${JSON.stringify(available.map(modelFact))}\nCurrent singleModel=${task.record.singleModel}; capacity=2; maxCalls=null.\nInput version=${initial.baseVersion}; source projection=${initial.workspace}; readOnly=${initial.readOnly}; write scope=${JSON.stringify(initial.scope)}\nOriginal directory=${v.root} (uncommitted content is outside the formal starting version; the original directory is not automatically overwritten).\nExecution capabilities=${JSON.stringify(work.execution)}; fixed checks=${JSON.stringify(checks)}. Apply the role, authorization and execution rules in the system prompt to these current facts.\n${renderAnswerSkills(task.answerSkills ?? [])}`,
     );
+    let lastVisualVersion, lastReviewKey, lastEvidenceCount;
+    for (;;) {
     guard();
+    pluginWork.assertHandled();
     if (mainBinding.failedMutations?.size)
       throw problem(
         "UNRESOLVED_TOOL",
@@ -1390,7 +1667,11 @@ export async function runWork({
         (actual.status !== "accepted" &&
           actual.privateVersion !== actual.baseVersion)
       )
-        throw problem("UNACCEPTED_CHANGE", "领导草稿尚未接纳。");
+        {
+          const diff=await v.inspect({fromVersion:actual.baseVersion,toVersion:actual.privateVersion});
+          if(!task.record.workRequest||c.status==="outcome_unknown"||diff.files.length||diff.text||diff.binaryFiles.length)throw problem("UNACCEPTED_CHANGE", "领导草稿尚未接纳。");
+          await abandon(c,"确认只有无内容变化的操作记账，结束检查");
+        }
     }
     if (mainBinding.unknownOperation)
       throw problem("OPERATION_UNKNOWN", "领导尚有未知命令。");
@@ -1406,6 +1687,53 @@ export async function runWork({
         "FINAL_CHECK",
         "最新组合检查未通过：" + work.finalCheck.status,
       );
+    if(task.record.workRequest) {
+      if (lastVisualVersion === work.version && work.visualEvidence.length === lastEvidenceCount)
+        throw problem("VISUAL_UNRESOLVED", "Visual review remains unresolved with no new version or additional captured evidence; preserve the partial artifact.");
+      const tree=await v.read({version:work.version,path:'.',kind:'tree'});
+      const entries=tree.entries.filter(e=>/\.(html?|svg)$/i.test(e.path)).map(e=>e.path);
+      const previous=work.visualEvidence?.findLast(e=>e.result==='captured'&&entries.includes(e.entry));
+      const entry=previous?.entry??(entries.length===1?entries[0]:null);
+      if(!entry)throw problem('VISUAL_ENTRY','最终版本没有明确的HTML/SVG作品入口；请实际制作文件并preview_html选择入口。');
+      // A pure observation command may add an operation commit. Close only after public empty-diff proof.
+      const current=await v.inspect({changeId:mainBinding.current.changeId});
+      if(!['accepted','abandoned','interrupted'].includes(current.status))await abandon(mainBinding.current,'最终视觉检查前结束无修改观察');
+      const check=await begin('main',[entry],['.'],'最终集成版本视觉检查',false);
+      if(check.status==='blocked'||check.baseVersion!==work.version)throw problem('STALE_VISUAL','最终检查范围被占用或集成版本已改变');
+      const preview=createPreviewTool({task,stage,versioning:v,getChange:()=>check,assertOwned:guard,onChanged:c=>Object.assign(check,syncChange(c)),onProgress});
+      let material;
+      try {
+        material=await preview.execute('final-visual-'+randomUUID(),{entry, ...(previous?.viewport ? {viewport:previous.viewport} : {}), ...(previous?.frameTimesMs ? {frameTimesMs:previous.frameTimesMs} : {}), ...(previous?.actions?.length ? {actions:previous.actions} : {})},task.signal);
+        const evidence=work.visualEvidence.at(-1);evidence.integrationVersion=work.version;
+        const diff=await v.inspect({fromVersion:work.version,toVersion:evidence.privateVersion});
+        if(diff.files.length||diff.text||diff.binaryFiles.length)throw problem('VISUAL_SOURCE_CHANGED','最终检查源码与集成版本不一致');
+        await abandon(check,'最终截图已取回，确认源码未变；不接纳操作记账提交');
+      } catch(e) { save(); throw e; }
+      const evidence = work.visualEvidence.at(-1);
+      const reviewKey = JSON.stringify([work.version, evidence.entry, evidence.viewport, evidence.images.map(i=>i.sha256), evidence.frameTimesMs, evidence.actions ?? []]);
+      if (lastReviewKey === reviewKey)
+        throw problem("VISUAL_UNRESOLVED", "No new visual evidence was provided; the previous review remains unresolved.");
+      lastVisualVersion = work.version;
+      lastReviewKey = reviewKey;
+      lastEvidenceCount = work.visualEvidence.length;
+      save();
+      const review = await reviewVisual(material, evidence);
+      const d = evidence.diagnostics;
+      const runtimeErrors = !!(d.pageErrors?.length || d.resourceErrors?.length || d.console?.some(x=>x.startsWith("error:")));
+      if (review.verdict === "match" && !runtimeErrors) break;
+      // The original implementation context receives only specific attributed feedback.
+      leader.bindTask(task, stage);
+      result = await leader.prompt(JSON.stringify({
+        source: "Independent visual review feedback; not a new user request",
+        originalTask: task.record.input,
+        review: { verdict: review.verdict, observation: review.observation, reasons: review.reasons, text: review.text },
+        ...(runtimeErrors ? { runtimeErrors: d } : {}),
+        instruction: "Address specific defects using the original task. Revise and accept a new version, or capture additional relevant views/interactions with preview_html. State any reasoned disagreement with new verifiable evidence. If you cannot act or supply missing evidence, explain the gap and stop; the result remains partial. Do not repeat unchanged requests or merely declare the review passed.",
+      }), { custom: "cothink-visual-feedback" });
+      continue;
+    }
+    break;
+    }
     const published = await begin("result", [], ["."], "只读最终成果", true);
     if (published.baseVersion !== work.version)
       throw problem("STALE_RESULT", "最终投影版本已变化");
@@ -1414,6 +1742,7 @@ export async function runWork({
     save();
     return result;
   } catch (e) {
+    executionError=e;
     try {
       task.stop(e);
     } catch {
@@ -1421,22 +1750,29 @@ export async function runWork({
     }
     throw e;
   } finally {
-    if (task.signal.aborted) abortMembers();
+    const cleanupErrors=[];
+    const cleanup=async(phase,run)=>{try{await run();}catch(error){cleanupErrors.push({phase,error});}};
+    if (task.signal.aborted) await cleanup("abort-members",()=>abortMembers());
     for (const m of members.values()) {
-      m.controller.abort();
-      if (!m.attempt) finishPromise(m);
+      await cleanup("cancel-member:"+m.record.memberId,()=>{m.controller.abort();if(!m.attempt)finishPromise(m);});
     }
-    for (const rt of runtimes) void rt.session.abort();
-    await Promise.allSettled([...members.values()].map((m) => m.promise));
+    await cleanup("plugin-helpers",()=>pluginWork?.close());
+    const aborts=await Promise.allSettled([...runtimes].map(rt=>rt.session.abort()));
+    aborts.forEach((result,index)=>{if(result.status==="rejected")cleanupErrors.push({phase:"abort-runtime:"+index,error:result.reason});});
+    await Promise.allSettled([...members.values()].map(m=>m.promise));
     if (leaderHeld) {
       leaderHeld = false;
       active--;
-      try {
-        capacity();
-      } catch {}
+      await cleanup("capacity",()=>capacity());
     }
-    for (const rt of runtimes) rt.dispose();
-    task.signal.removeEventListener("abort", abortMembers);
-    if (v) await v.close();
+    // A known partial result or an unknown shutdown in one session cannot skip another session.
+    for(const rt of runtimes)await cleanup("runtime:"+rt.sessionManager.getSessionId(),()=>rt.dispose());
+    task.signal.removeEventListener("abort",abortMembers);
+    if(v)await cleanup("versioning",()=>v.close());
+    if(cleanupErrors.length) {
+      work.cleanupErrors=cleanupErrors.map(({phase,error})=>({phase,code:error.code??null,message:error.message??String(error)}));
+      try{save();}catch{}
+      if(!executionError)throw cleanupErrors[0].error;
+    }
   }
 }

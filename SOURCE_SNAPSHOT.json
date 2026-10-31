@@ -1,0 +1,23 @@
+{
+  "version": "0.8.9-native.1",
+  "sourceCommit": "b29dca089356ed7ccdb80d407bab9c53525f1791",
+  "runtimeCheckpoint": "4d6b812",
+  "originalCandidateSha256": "5743f6cf9b15ca62b0d550521226c28be8c2e8d6ea3c5906472def51d582c644",
+  "archive": "cothink-v2-0.8.9-native.1.tgz",
+  "sha256": "9d1ec5eda7f5d6d99e6d19600044a8067a36379735506370cffb8e7b86d4e5a2",
+  "changesFromValidatedCandidate": [
+    "CHANGELOG.md",
+    "VALIDATION.md",
+    "README.md"
+  ],
+  "runtimeAndDependenciesUnchanged": true,
+  "publication": "GitHub prerelease only; no npm publication",
+  "validation": {
+    "reusedInstalledWorkflowAndRecursiveBackground": 2,
+    "reusedInstalledRemoteCases": 4,
+    "startupFailureCases": "mechanism tests with boundary doubles",
+    "paidProviders": false,
+    "externalMachines": false,
+    "windowsDevice": false
+  }
+}

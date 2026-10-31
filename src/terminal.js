@@ -1,3 +1,5 @@
+import { finalAnswerText } from './final-answer.js';
+export { finalAnswerText } from './final-answer.js';
 import { thinkingLabel } from './thinking.js';
 import { createInterface } from 'node:readline/promises';
 import { PassThrough, Writable } from 'node:stream';
@@ -199,55 +201,6 @@ export function safeText(value) {
 }
 
 
-/** Presentation only: preserve the raw reply for details, exports and future turns. */
-export function finalAnswerText(text) {
-  const lines = text.split(/\r?\n/);
-  let fence = null, section = null;
-  for (let index = 0; index < lines.length; index++) {
-    const line = lines[index];
-    const code = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
-    if (fence) {
-      if (code && code[1][0] === fence[0] && code[1].length >= fence.length && !code[2].trim()) fence = null;
-      continue;
-    }
-    if (code) { fence = code[1]; continue; }
-    if (section?.kind === 'details') {
-      if (/^ {0,3}<details(?:[ \t]+open)?[ \t]*>[ \t]*$/i.test(line)) section.depth++;
-      if (/^ {0,3}<\/details>[ \t]*$/i.test(line) && --section.depth === 0) {
-        section.end = index + 1;
-        break;
-      }
-      continue;
-    }
-    if (!section && /^ {0,3}<details(?:[ \t]+open)?[ \t]*>[ \t]*$/i.test(line)) {
-      let summaryIndex = index + 1;
-      while (summaryIndex < lines.length && !lines[summaryIndex].trim()) summaryIndex++;
-      const summary = /^ {0,3}<summary>[ \t]*(.*?)[ \t]*<\/summary>[ \t]*$/i.exec(lines[summaryIndex] ?? '');
-      const title = summary?.[1].replace(/^#{1,6}[ \t]+/, '').replace(/^\*\*(.*?)\*\*$/, '$1').replace(/[：:]$/, '');
-      if (title === '对评审意见的处理说明') {
-        section = { kind: 'details', start: index, end: null, depth: 1 };
-        index = summaryIndex;
-        continue;
-      }
-    }
-    const heading = /^ {0,3}(#{1,6})[ \t]+(.+?)(?:[ \t]+#+)?[ \t]*$/.exec(line);
-    const title = (heading ? heading[2] : /^ {0,3}(\S.*?)[ \t]*$/.exec(line)?.[1] ?? '')
-      .replace(/^\*\*(.*?)\*\*$/, '$1').replace(/[：:]$/, '');
-    if (section && heading && heading[1].length <= section.level) {
-      section.end = index;
-      break;
-    }
-    if (!section && title === '对评审意见的处理说明') {
-      section = { start: index, end: lines.length, level: heading ? heading[1].length : 6 };
-    }
-  }
-  if (!section || section.end === null) return text;
-  const before = lines.slice(0, section.start).join('\n').trimEnd();
-  // Never replace an answerless/malformed reply with an empty screen.
-  if (!before.trim()) return text;
-  const after = lines.slice(section.end).join('\n').trimStart();
-  return before + (after ? '\n\n' + after : '');
-}
 
 export function renderRun(run, all = false) {
   if (run.status === 'completed' && !all) return finalAnswerText(run.stages[2].response.text) + '\n';

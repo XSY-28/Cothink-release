@@ -1,5 +1,6 @@
+import { createPreviewTool } from "./visual-preview.js";
 import { randomUUID, createHash } from "node:crypto";
-import { readFileSync, lstatSync, unlinkSync } from "node:fs";
+import { readFileSync, lstatSync, unlinkSync, realpathSync } from "node:fs";
 import { relative, resolve, isAbsolute, join } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -12,7 +13,7 @@ import {
   createFindToolDefinition,
   createLsToolDefinition,
 } from "@earendil-works/pi-coding-agent";
-import { inScope } from "./versioning.js";
+import { inScope, withChangeQueue } from "./versioning.js";
 import { problem } from "./task.js";
 const exec = promisify(execFile),
   hash = (b) => createHash("sha256").update(b).digest("hex");
@@ -29,6 +30,7 @@ export function workspaceTools({
   readOnly = false,
   assertOwned = () => {},
   onProgress = () => {},
+  visualPreview = false,
 }) {
   if (!versioning)
     throw problem("VERSIONING_REQUIRED", "工作工具必须绑定agent-sync实例。");
@@ -36,7 +38,6 @@ export function workspaceTools({
   binding.reads ??= new Map();
   binding.observations ??= new Map();
   binding.failedMutations ??= new Map();
-  let queue = Promise.resolve();
   const prototypes = [
     createReadToolDefinition("."),
     createGrepToolDefinition("."),
@@ -50,6 +51,7 @@ export function workspaceTools({
         ]
       : []),
   ];
+  if (visualPreview && !readOnly) prototypes.push(createPreviewTool({task,stage,versioning,getChange,binding,onChanged,assertOwned,onProgress}));
   function save() {
     try {
       task.save();
@@ -77,6 +79,15 @@ export function workspaceTools({
       throw problem("PATH", "需要无歧义的工作区相对路径。");
     if (path.startsWith("output:"))
       throw problem("PATH", "output:只用于read日志，不能作为源码路径。");
+    if(isAbsolute(path))for(const context of task.record.tools??[]) {
+      if(context.kind!=="native_plugin_context"||context.changeId!==c.changeId)continue;
+      const roots=[resolve(context.cwd)];try{roots.push(realpathSync(context.cwd));}catch{}
+      for(const root of roots) {
+        const rel=relative(root,resolve(path));
+        if(!isAbsolute(rel)&&rel!==".."&&!rel.startsWith("../")) {path=rel||".";break;}
+      }
+      if(!isAbsolute(path))break;
+    }
     const nativeRel = relative(c.workspace, resolve(c.workspace, path));
     // The kernel uses portable repository paths; native Windows absolute paths
     // are accepted at the tool boundary, then normalized before scope checks.
@@ -117,8 +128,26 @@ export function workspaceTools({
     return Buffer.concat(chunks);
   }
   async function perform(def, id, args, signal, onUpdate, ctx) {
+    if (def.name === "preview_html") return def.execute(id,args,signal);
     const started = performance.now();
     guard();
+    // Explicit selected skill references/scripts are read from the task copy, never the live home.
+    // Script execution still uses the existing offline Docker Shell after reading its contents.
+    const resource = def.name === "read" && typeof args.path === "string" &&
+      (task.record.work?.skillResources ?? []).map(r=>{
+        let requested=resolve(args.path);
+        try {requested=realpathSync(requested);} catch {}
+        const rel=relative(r.sourceDirectory,requested).replaceAll("\\","/");
+        return rel && !rel.startsWith("../") && !isAbsolute(rel) && r.files[rel] ? {r,rel} : null;
+      }).find(Boolean);
+    if(resource) {
+      const path=join(resource.r.root,resource.rel),bytes=readFileSync(path);
+      if(hash(bytes)!==resource.r.files[resource.rel])throw problem("SKILL_CHANGED","Frozen task skill resource changed");
+      const native=createReadToolDefinition(resource.r.root,{operations:{access:async()=>{},readFile:async()=>bytes,detectImageMimeType:async()=>null}});
+      const result=await native.execute(id,{...args,path},signal,onUpdate,ctx);
+      (task.record.tools??=[]).push({toolCallId:id,name:"read",stageId:role().id,status:"completed",resourcePath:args.path,resourceHash:hash(bytes)});
+      save();return result;
+    }
     const s = role(),
       combined = signal ? AbortSignal.any([signal, task.signal]) : task.signal;
     if (combined.aborted) throw combined.reason;
@@ -589,9 +618,7 @@ export function workspaceTools({
   return prototypes.map((def) => ({
     ...def,
     async execute(...args) {
-      const run = queue
-        .catch(() => {})
-        .then(() => perform(def, ...args))
+      const run = withChangeQueue(versioning, getChange().changeId, () => perform(def, ...args))
         .catch((e) => {
           const trace = (task.record.tools ?? []).find(
             (t) => t.toolCallId === args[0] && t.stageId === role().id,
@@ -614,7 +641,6 @@ export function workspaceTools({
           }
           throw e;
         });
-      queue = run;
       return run;
     },
   }));

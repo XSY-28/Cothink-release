@@ -1,0 +1,71 @@
+{
+  "package": "pi-subagents",
+  "version": "0.84.0",
+  "revision": "foreground-unlimited-v1",
+  "integrity": "sha512-IagE1hcBxLi82jTxTmcy/pIWckBuqhMH1GfAOe6/aIMVfnopMybCbcTMUS5K0CNy4tqSwHGleaXabaDmJS1QOg==",
+  "files": [
+    {
+      "path": "src/slash/delegation-request.js",
+      "before": "6fc1b44096b465670abb0d726b5dd11ee8673e5ac52864e8a3236a9c673c832b",
+      "after": "f34bfea75a8f56b86be5fb5ab832f9d52d63bbbb69b7eaef6076a56d9fcc07fb",
+      "replacements": [
+        [
+          "value.timeoutMs < 1",
+          "value.timeoutMs < 0"
+        ],
+        [
+          "timeoutMs must be an integer >= 1.",
+          "timeoutMs must be an integer >= 0 (0 disables the foreground single-child run deadline)."
+        ]
+      ]
+    },
+    {
+      "path": "bundle/chunk-235AWJUQ.js",
+      "before": "8ca9682c197438c39908d555236f99af71ccb3e8cb46a7c841a533be4a843aa2",
+      "after": "09ad0c5e240e241a337d9cc3d5e4a838f7d78d70dcf3a35e62a7c00fdc8a2473",
+      "replacements": [
+        [
+          "value.timeoutMs < 1",
+          "value.timeoutMs < 0"
+        ],
+        [
+          "timeoutMs must be an integer >= 1.",
+          "timeoutMs must be an integer >= 0 (0 disables the foreground single-child run deadline)."
+        ]
+      ]
+    },
+    {
+      "path": "src/runs/foreground/subagent-executor.js",
+      "before": "06cd1f2efae694f7dcf4c86d2b627ef967c6c3fe368a9c78cabd9a5f14234e76",
+      "after": "ed8f72f3bd431bd68f0de1ec51a02b86b92b5ec6d221efe141b33b7876e98ca2",
+      "replacements": [
+        [
+          "function resolveSingleAgentLaunchTimeout(params, async, configDefaultTimeoutMs) {\n",
+          "function resolveSingleAgentLaunchTimeout(params, async, configDefaultTimeoutMs) {\n    // CoThink pi-subagents-0.84.0 foreground-unlimited-v1: never pass raw zero to deadline arithmetic.\n    if (params.timeoutMs === 0 && !async && params.agent && !params.chain?.length && !params.tasks?.length && params.workflowScript === undefined && params.maxRuntimeMs === undefined) return {};\n"
+        ]
+      ]
+    },
+    {
+      "path": "bundle/chunk-JG4QKI5M.js",
+      "before": "4163ac30dde1c638a5d7bf5ec1afe76f7e2e47e43f32076d7ca5ab8d86ef914e",
+      "after": "4144d1501171fb5c41ed9339c8881cd2fed13618afc87b0305ccc269b6eb77f6",
+      "replacements": [
+        [
+          "function resolveSingleAgentLaunchTimeout(params, async, configDefaultTimeoutMs) {\n",
+          "function resolveSingleAgentLaunchTimeout(params, async, configDefaultTimeoutMs) {\n    // CoThink pi-subagents-0.84.0 foreground-unlimited-v1: never pass raw zero to deadline arithmetic.\n    if (params.timeoutMs === 0 && !async && params.agent && !params.chain?.length && !params.tasks?.length && params.workflowScript === void 0 && params.maxRuntimeMs === void 0) return {};\n"
+        ]
+      ]
+    },
+    {
+      "path": "src/api/delegation.d.ts",
+      "before": "66bc1230efb2805da6b3e6e72b3635dc989d135bdeddc9e5a54075e1884fdbfe",
+      "after": "c0f2d9015fe761eedfa4c7845af1e2a0e37dd83d42741f5c5027e74c15b6f010",
+      "replacements": [
+        [
+          "    timeoutMs?: number;",
+          "    /** CoThink compatibility: explicit 0 disables the foreground single-child run deadline; omitted preserves upstream defaults. */\n    timeoutMs?: number;"
+        ]
+      ]
+    }
+  ]
+}

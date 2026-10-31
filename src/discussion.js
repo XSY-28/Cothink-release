@@ -1,3 +1,4 @@
+import { validateWorkRequest, preflightVisual } from "./visual-preview.js";
 import { readFileSync } from "node:fs";
 import {
   reviewMaterial,
@@ -20,6 +21,7 @@ import {
 import { cothinkExtension } from "./extensions/cothink.js";
 import { snapshotTeam, readSessionTeam } from "./teams.js";
 import { validateConfig } from "./config.js";
+import { DEFAULT_THINKING_LEVEL } from "./thinking.js";
 const prompt = (name) =>
   readFileSync(new URL(`../prompts/${name}.md`, import.meta.url), "utf8");
 export async function runTurn({
@@ -28,12 +30,16 @@ export async function runTurn({
   input,
   config,
   singleModel = false,
+  workRequest,
   mainRuntime,
+  allowWork = true,
   signal,
   onProgress = () => {},
   ...options
 }) {
-  const parsed = parseTurnInput(input);
+  workRequest = validateWorkRequest(workRequest);
+  const parsed = workRequest ? {input, singleModel:false} : parseTurnInput(input);
+  workRequest ??= parsed.workRequest;
   if (parsed.local) return parsed;
   input = parsed.input;
   singleModel = singleModel || parsed.singleModel;
@@ -43,17 +49,21 @@ export async function runTurn({
     for (const ref of [frozen.main, ...frozen.secondary])
       ref.maxOutputTokens = options.maxOutputTokens;
   }
+  validateConfig(frozen);
+  const catalog = mainRuntime?.modelRuntime ?? (await createModelRuntime(home));
+  for (const ref of [frozen.main, ...frozen.secondary]) {
+    if (ref.thinkingLevel === undefined && catalog.getModel(ref.provider, ref.modelId)?.reasoning)
+      ref.thinkingLevel = DEFAULT_THINKING_LEVEL;
+  }
   if (frozen.team)
     frozen.team = snapshotTeam({
       ...frozen.team,
       main: frozen.main,
       secondary: frozen.secondary,
     });
-  validateConfig(frozen);
-  const catalog = mainRuntime?.modelRuntime ?? (await createModelRuntime(home));
   await validateModelRefs(frozen, catalog, { singleModel });
   const configuredResources = selectedResources(frozen, cwd);
-  const host = {};
+  const host = { allowWork };
   let rt = mainRuntime;
   let own = !rt;
   if (!rt)
@@ -65,13 +75,16 @@ export async function runTurn({
       extensionFactories: [
         { name: "cothink", factory: cothinkExtension(host) },
       ],
+      ...(!allowWork ? { activeToolNames: [] } : {}),
+      ...options,
       resourceOptions: {
-        ...selectedResources(frozen, cwd),
+        ...configuredResources,
+        ...options.resourceOptions,
+        ...(!allowWork ? {noContextFiles: true} : {}),
         systemPrompt: prompt("main"),
       },
-      ...options,
     });
-  let answerSkills;
+  let answerSkills, visualPreflight;
   try {
     await rt.checkPackages({ resourceOptions: configuredResources });
     answerSkills = /^\/skill:[^\s]+(?:\s|$)/.test(input)
@@ -85,14 +98,18 @@ export async function runTurn({
           ],
         });
   } catch (error) {
-    if (own) rt.dispose();
+    if (own) await rt.dispose();
     throw error;
+  }
+  if (workRequest) {
+    try { visualPreflight = await preflightVisual({cwd,config:frozen,skills:answerSkills,model:catalog.getModel(frozen.main.provider,frozen.main.modelId),allowWork}); }
+    catch(e) { if(own) await rt.dispose(); throw e; }
   }
   const manager = rt.sessionManager;
   let task;
   try {
     const command = singleLineCommand(input);
-    if (command && !isGenerationCommand(command[1], rt))
+    if (command && !workRequest && !isGenerationCommand(command[1], rt))
       throw Error(
         "本地或未知命令不能作为问题提交；请在交互界面使用本地命令。未发送模型请求。",
       );
@@ -113,15 +130,18 @@ export async function runTurn({
         secondary: singleModel ? [] : frozen.secondary.slice(0, 1),
       },
       singleModel,
+      workRequest,
       sessionId: manager.getSessionId(),
       branchId: manager.getLeafId(),
       ...options,
     });
   } catch (error) {
-    if (own) rt.dispose();
+    if (own) await rt.dispose();
     throw error;
   }
   task.packageSnapshot = rt.packageSnapshot;
+  task.extensionUI=rt.extensionUI;
+  task.extensionMode=rt.extensionMode;
   task.resourceOptions = { ...rt.resourceOptions, ...configuredResources };
   host.task = task;
   host.runtime = rt;
@@ -133,6 +153,8 @@ export async function runTurn({
   if (signal?.aborted) await task.cancel();
   try {
     task.answerSkills = answerSkills;
+    task.record.visualPreflight=visualPreflight;
+    task.preflightVisual = async () => {task.record.visualPreflight=await preflightVisual({cwd,config:frozen,skills:answerSkills,model:catalog.getModel(frozen.main.provider,frozen.main.modelId),allowWork});task.save();return task.record.visualPreflight;};
     task.record.answerSkills = answerSkills.map(
       ({ body, ...summary }) => summary,
     );
@@ -144,9 +166,15 @@ export async function runTurn({
       .map(
         (e) => e.message ?? { customType: e.customType, content: e.content },
       );
-    const draftStage = task.beginPhase("draft", "main", frozen.main);
-    rt.bindTask(task, draftStage);
-    const draft = await rt.prompt(input);
+    let draft;
+    if(workRequest) {
+      task.record.mode="work";task.record.maxCalls=null;task.record.workReason="明确HTML/SVG制作请求";
+      task.record.workIntent={reason:task.record.workReason};task.save();
+      const userMessage={role:"user",content:[{type:"text",text:input}],timestamp:Date.now()};
+      manager.appendMessage(userMessage);rt.session.agent.state.messages=[...rt.session.agent.state.messages,userMessage];
+    } else {
+      const draftStage=task.beginPhase("draft","main",frozen.main);rt.bindTask(task,draftStage);draft=await rt.prompt(input);
+    }
     if (task.record.mode === "work") {
       const { runWork } = await import("./workers.js");
       const result = await runWork({
@@ -154,6 +182,7 @@ export async function runTurn({
         home,
         cwd,
         config: frozen,
+        initialMaterial: {history:frozenHistory,...(draft?{routingText:draft.text}:{})},
         onProgress,
         ...options,
       });
@@ -181,8 +210,13 @@ export async function runTurn({
       modelRef: ref,
       role: `review-${task.record.id}`,
       packageSnapshot: rt.packageSnapshot,
-      resourceOptions: { systemPrompt: prompt("review") },
       ...options,
+      resourceOptions: {
+        ...rt.resourceOptions,
+        ...options.resourceOptions,
+        noContextFiles: true,
+        systemPrompt: prompt("review"),
+      },
     });
     let review;
     try {
@@ -208,7 +242,7 @@ export async function runTurn({
         }),
       );
     } finally {
-      reviewer.dispose();
+      await reviewer.dispose();
     }
     if (task.signal.aborted) throw task.signal.reason;
     const revisionStage = task.beginPhase("revision", "main", frozen.main);
@@ -232,7 +266,7 @@ export async function runTurn({
       task.finish(
         task.record.cancelRequestedAt
           ? "cancelled"
-          : task.requests().some((r) => r.status === "outcome_unknown")
+          : task.record.status==="outcome_unknown" || task.requests().some((r) => r.status === "outcome_unknown")
             ? "outcome_unknown"
             : task.requests().some((r) => r.text)
               ? "partial"
@@ -271,7 +305,7 @@ export async function runTurn({
     host.task = undefined;
     rt.hostContext?.(undefined);
     signal?.removeEventListener("abort", cancel);
-    if (own) rt.dispose();
+    if (own) await rt.dispose();
     else rt.unbindTask();
   }
 }

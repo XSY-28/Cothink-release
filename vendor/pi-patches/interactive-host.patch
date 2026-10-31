@@ -397,3 +397,13 @@
 +
 +// Optional SDK host transport configuration; Pi CLI already uses this helper.
 +export { configureHttpDispatcher } from "./core/http-dispatcher.ts";
+--- a/packages/coding-agent/src/core/extensions/loader.ts
++++ b/packages/coding-agent/src/core/extensions/loader.ts
+@@ -572,2 +572,2 @@
+-	// Source TypeScript reuses host modules and root tsconfig paths. Unbundled
+-	// Node builds use dist aliases and do not need the bundled virtual modules.
++	// Source TypeScript and Node reuse the shared SDK module identities. Node
++	// resolves other public subpaths through package exports, without prefix aliases.
+@@ -578 +578 @@
+-			: { alias: getAliases() };
++			: { virtualModules: await getVirtualModules() };

@@ -24,9 +24,12 @@ import {
 } from "./terminal.js";
 const help = `CoThink
 用法：cothink | cothink -c | cothink -r
+  cothink gui [--port N] [--no-open]  打开本地浏览器界面（无需先配置）
+  cothink check-update [--json]       检查官方 npm 发布版本（无需模型配置）
   cothink init                       选择主副模型、复用 Pi 认证并命名 team
   cothink init --import-legacy        显式备份并导入旧配置（不生成）
   cothink [ask] [--one] [--all|--json] [问题]
+  cothink make-html [--one] [--json] <任务>（支持管道多行输入；需Git项目、显式技能与离线镜像）
   cothink history [--json] | cothink show ID [--all|--json]
   cothink install npm:包名 | cothink list | cothink remove npm:包名 [--json]
   cothink migrate-work 项目路径 [--rollback] [--json]  显式旧格式迁移/无新接纳时回退
@@ -34,6 +37,7 @@ const help = `CoThink
 交互中 /one 进入单模型模式，/cothink 回到讨论模式；输入框附近显示当前模式。
 /one <任务> 或 --one：仅本条使用主模型。单模型纯答一次；讨论纯答由第一位副模型评审、主模型修订，共三次。
 /chat 或 Ctrl+O 查看完整讨论；Esc 返回。Esc / Ctrl+C 取消整条任务。
+/updates 查看可用更新与安装指引；默认后台访问 npm，可关闭。
 /changelog 查看随安装包提供的 CoThink 完整更新记录；升级后首次启动显示摘要。
 /new /resume /fork /tree /reload 复用 Pi；运行时拒绝切换并保留草稿。
 /team 选择、新建、调整、删除组合；/models 编辑阵容并另存 team；/login /logout 认证，/thinking 实际支持档位。
@@ -45,12 +49,13 @@ COTHINK_HOME 默认 ~/.cothink。旧配置须显式导入；旧历史只读。
 export async function main(args = process.argv.slice(2)) {
   const home = resolve(process.env.COTHINK_HOME || join(homedir(), ".cothink"));
   process.env.PI_CODING_AGENT_DIR = join(home, "pi");
-  let terminal, io, task;
+  let terminal, io, task, gui, updater;
   const controller = new AbortController();
   let signalCode;
   const cancel = (signal) => {
     signalCode = signal === "SIGTERM" ? 143 : 130;
     controller.abort();
+    updater?.close();
   };
   const onInt = () => cancel("SIGINT"),
     onTerm = () => cancel("SIGTERM");
@@ -62,6 +67,35 @@ export async function main(args = process.argv.slice(2)) {
   };
   process.stdout.on("error", pipeError);
   try {
+    if (args[0] === "check-update") {
+      const {values,positionals}=parseArgs({args:args.slice(1),allowPositionals:true,
+        options:{json:{type:"boolean"},help:{type:"boolean",short:"h"}}});
+      if(positionals.length) throw Error("用法：cothink check-update [--json]");
+      if(values.help) {process.stdout.write("用法：cothink check-update [--json]\n");return 0;}
+      const {createUpdateService,updatePanelText}=await import("./updates.js");
+      updater=createUpdateService({home});
+      if(controller.signal.aborted) updater.close();
+      const result=await updater.check({manual:true});
+      process.stdout.write(values.json ? JSON.stringify(result,null,2)+"\n" : updatePanelText(result)+"\n");
+      return signalCode ?? (["available","current","ahead"].includes(result.status) ? 0 : 1);
+    }
+    if (args[0] === "gui") {
+      const { values, positionals } = parseArgs({
+        args: args.slice(1), allowPositionals: true,
+        options: { port: { type: "string" }, "no-open": { type: "boolean" }, help: { type: "boolean", short: "h" } },
+      });
+      if (positionals.length) throw Error("用法：cothink gui [--port N] [--no-open]");
+      if (values.help) { process.stdout.write("用法：cothink gui [--port N] [--no-open]\n"); return 0; }
+      const port = values.port === undefined ? 0 : Number(values.port);
+      if ((values.port !== undefined && !/^\d+$/.test(values.port)) || !Number.isInteger(port) || port < 0 || port > 65535)
+        throw Error("GUI 端口必须是 0—65535 的整数。");
+      const { startGuiServer } = await import("./gui-server.js");
+      gui = await startGuiServer({ home, cwd: process.cwd(), port, open: !values["no-open"] });
+      process.stdout.write(`CoThink GUI：${gui.url}\n此本地链接包含本次启动凭据，请勿分享或写入任务记录。\n`);
+      if (!controller.signal.aborted) await new Promise((resolve) => controller.signal.addEventListener("abort", resolve, { once: true }));
+      await gui.close();
+      return signalCode ?? 0;
+    }
     const management = parsePackageCommand(args);
     if (management) {
       const outcome = management.error
@@ -103,7 +137,7 @@ export async function main(args = process.argv.slice(2)) {
       return 0;
     }
     if (values.json && values.all) throw Error("--json 与 --all 互斥");
-    const command = ["ask", "init", "history", "show", "migrate-work"].includes(
+    const command = ["ask", "make-html", "init", "history", "show", "migrate-work"].includes(
       positionals[0],
     )
       ? positionals.shift()
@@ -225,7 +259,7 @@ export async function main(args = process.argv.slice(2)) {
       !values.json &&
       !values.all &&
       !values.print &&
-      args[0] !== "ask"
+      args[0] !== "ask" && command !== "make-html"
     ) {
       if (config.formatVersion === 2) {
         terminal = openTerminal(); io = setupIO(terminal, controller.signal);
@@ -271,7 +305,8 @@ export async function main(args = process.argv.slice(2)) {
         }
       }
     }
-    const parsed = parseTurnInput(input);
+    const workRequest = command === "make-html" ? {kind:"html-svg"} : undefined;
+    const parsed = workRequest ? {input} : parseTurnInput(input);
     if (parsed.local) {
       process.stdout.write(parsed.message + "\n");
       return 0;
@@ -287,10 +322,12 @@ export async function main(args = process.argv.slice(2)) {
       input,
       config,
       singleModel: values.one,
+      workRequest,
       signal: controller.signal,
       maxOutputTokens,
       timeout,
       onProgress: (e) => {
+        if(e.type==="started" && e.task.record.workRequest) process.stderr.write("制作合同：HTML/SVG；工作调用次数不设上限；技能 "+e.task.record.answerSkills.map(s=>s.name+" SHA-256 "+s.hash).join("、")+"\n");
         if (e.type === "git")
           process.stderr.write(
             safeText(e.operation.explanation) +
@@ -339,6 +376,8 @@ export async function main(args = process.argv.slice(2)) {
     process.stderr.write(safeText(error.message) + "\n");
     return signalCode ?? 2;
   } finally {
+    updater?.close();
+    await gui?.close();
     io?.close();
     terminal?.close();
     process.off("SIGINT", onInt);

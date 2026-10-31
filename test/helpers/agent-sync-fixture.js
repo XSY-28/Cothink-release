@@ -1,9 +1,13 @@
 import { after } from "node:test";
 import { readFileSync, rmSync } from "node:fs";
 import { repository } from "./git-fixture.js";
-import { createVersioning } from "../../src/versioning.js";
-import { createTask } from "../../src/task.js";
-import { workspaceTools } from "../../src/workspaces.js";
+import { resolve, join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+const productRoot=resolve(process.env.COTHINK_TEST_PACKAGE_ROOT??fileURLToPath(new URL("../..",import.meta.url)));
+const load=path=>import(pathToFileURL(join(productRoot,path)));
+const {createVersioning}=await load("src/versioning.js");
+const {createTask}=await load("src/task.js");
+const {workspaceTools}=await load("src/workspaces.js");
 export const execution = JSON.parse(
   readFileSync(
     new URL(

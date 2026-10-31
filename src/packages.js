@@ -1,4 +1,5 @@
 import { parseArgs } from "node:util";
+import { preparePluginCompatibility, inspectPluginCompatibility, pluginCompatibilityRevision } from "./plugin-compatibility.js";
 import {
   readFileSync,
   existsSync,
@@ -21,6 +22,7 @@ import {
   isAbsolute,
   basename,
   extname,
+  dirname,
 } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import { spawn, execFileSync } from "node:child_process";
@@ -38,6 +40,7 @@ import {
   writePrivateBytes,
   acquirePackageLock,
   assertNoActivePiSessions,
+  assertPackageReadable,
 } from "./storage.js";
 
 const commands = new Set(["install", "list", "remove"]);
@@ -55,27 +58,17 @@ const inside = (root, path) => {
 };
 const npmCommand = (offline) => [
   "npm",
-  "--ignore-scripts",
   "--save-exact",
   "--no-audit",
   "--no-fund",
   "--no-update-notifier",
   ...(offline ? ["--offline"] : []),
 ];
-function packageManager(agentDir, entries, offline = true) {
+function packageManager(agentDir, entries, offline = true, cwd = agentDir, projectEntries = []) {
   const settings = SettingsManager.inMemory(
-    { packages: entries, npmCommand: npmCommand(offline) },
-    { projectTrusted: false },
-  );
-  return {
-    settings,
-    manager: new DefaultPackageManager({
-      cwd: agentDir,
-      agentDir,
-      settingsManager: settings,
-      builtinExtensions: [],
-    }),
-  };
+    { packages: entries, npmCommand: npmCommand(offline) }, { projectTrusted: true });
+  settings.setProjectPackages(projectEntries);
+  return { settings, manager: new DefaultPackageManager({ cwd, agentDir, settingsManager: settings, builtinExtensions: [] }) };
 }
 function readSettings(agentDir) {
   let value;
@@ -103,7 +96,7 @@ function readSettings(agentDir) {
     )
       throw failure("PACKAGE_SETTINGS", "包登记项目无效。");
     const parsed = parsePackageSource(sourceOf(entry));
-    if (!exactVersion.test(parsed.version ?? "") || names.has(parsed.name))
+    if ((parsed.type === "npm" && !exactVersion.test(parsed.version ?? "")) || names.has(parsed.name))
       throw failure("PACKAGE_SETTINGS", "包登记必须使用唯一包身份与精确版本。");
     names.add(parsed.name);
     if (typeof entry === "object") {
@@ -270,8 +263,8 @@ function dataIdentities(kind, path, cwd, home) {
     : [];
 }
 // Same command namespace as the native host, including its hidden compatibility alias.
-const localNames = new Set(
-  "one cothink chat team models model help settings scoped-models thinking export import copy name session changelog hotkeys fork clone tree trust login logout new reload debug resume quit compact install list remove update uninstall config".split(
+export const localNames = new Set(
+  "one cothink make-html chat team models model help settings scoped-models thinking export import copy name session changelog updates check-update hotkeys fork clone tree trust login logout new reload debug resume quit compact install list remove update uninstall config".split(
     " ",
   ),
 );
@@ -303,106 +296,77 @@ function validateDataResources(rows, manual, cwd, home) {
   }
 }
 
-async function inspectPackages({
-  home,
-  cwd = process.cwd(),
-  agentDir = join(home, "pi"),
-  settings = readSettings(agentDir),
-  manual = manualResources(home),
-}) {
-  const rows = [];
-  for (const entry of settings.packages ?? []) {
-    const source = sourceOf(entry),
-      { name, version } = parsePackageSource(source);
-    const row = { source, name, version, status: "missing", resources: [] };
-    rows.push(row);
-    const expected = join(agentDir, "npm", "node_modules", name);
-    if (!existsSync(expected)) {
-      row.reason = "受管安装缺失；不读取普通 Pi/global npm 回退。";
-      continue;
+async function inspectPackages({ home, cwd = process.cwd(), agentDir = join(home, "pi"),
+  settings = readSettings(agentDir), projectSettings, manual = manualResources(home), authorizedProject = false, management = false }) {
+  const projectKey=realpathSync(cwd), authorized=settings.cothinkProjects?.[projectKey];
+  if(authorized && !management)assertPackageReadable(home,{agentDir:join(cwd,".pi")});
+  projectSettings ??= authorized ? readSettings(join(cwd,".pi")) : {};
+  const selectedProject = authorizedProject || authorized === digest(JSON.stringify(projectSettings.packages ?? [])) ? projectSettings.packages ?? [] : [];
+  const {manager} = packageManager(agentDir, settings.packages ?? [], true, cwd, selectedProject);
+  const registrations=[...(settings.packages??[]).map(entry=>({entry,scope:"user"})),...selectedProject.map(entry=>({entry,scope:"project"}))];
+  const effective = registrations.map(({entry,scope})=>{
+    let effectiveEntry=entry,installScope=scope;
+    if(scope==="project" && typeof entry==="object" && entry.autoload===false) {
+      const requested=absoluteSource(sourceOf(entry),join(cwd,".pi"));
+      const probe=packageManager(agentDir,settings.packages??[],true,cwd);
+      const before=probe.settings.getGlobalSettings().packages??[];
+      probe.manager.removeSourceFromSettings(requested);
+      const after=probe.settings.getGlobalSettings().packages??[];
+      const user=before.find(e=>!after.includes(e));
+      if(user){effectiveEntry=user;installScope="user";}
     }
+    const source=sourceOf(entry), effectiveSource=sourceOf(effectiveEntry),parsed=parsePackageSource(effectiveSource);
+    const expected=parsed.type==="npm"?join(installScope==="user"?agentDir:join(cwd,".pi"),"npm/node_modules",parsed.name):null;
+    // Native getInstalledPath probes global npm when a managed npm tree is absent; never execute that fallback in list.
+    const installedPath=expected?(existsSync(expected)?expected:undefined):manager.getInstalledPath(effectiveSource,installScope);
+    return {source,effectiveSource,scope,installScope,delta:effectiveEntry!==entry,filtered:typeof entry!=="string",installedPath,
+      name:parsed.name,version:parsed.version??null,type:parsed.type,status:"missing",resources:[]};
+  });
+  const rows=effective;
+  for (const row of rows) {
     try {
-      const prefix = realpathSync(agentDir),
-        root = realpathSync(expected);
-      if (root !== join(prefix, "npm", "node_modules", name))
-        throw failure("PACKAGE_RESOURCE_ESCAPE", "包安装不属于受管 prefix。");
-      row.installedPath = root;
-      const manifest = JSON.parse(
-        readFileSync(join(root, "package.json"), "utf8"),
-      );
-      if (manifest.name !== name || manifest.version !== version)
-        throw failure(
-          "PACKAGE_CONTENT_MISMATCH",
-          "安装内容不符：登记版本与文件不一致。",
-        );
-      checkManifest(root, manifest);
-      const { manager } = packageManager(agentDir, [entry]);
-      const configured = manager.listConfiguredPackages();
-      if (
-        configured.length !== 1 ||
-        manager.getInstalledPath(source, "user") !== expected
-      )
-        throw failure(
-          "PACKAGE_CONTENT_MISMATCH",
-          "安装内容不符：Pi 来源定位不一致。",
-        );
-      const found = await manager.resolve(async () => "error");
-      for (const kind of kinds)
-        for (const r of found[kind]) {
-          if (
-            r.metadata.origin !== "package" ||
-            r.metadata.source !== source ||
-            !r.metadata.packageRoot ||
-            realpathSync(r.metadata.packageRoot) !== root
-          )
-            continue;
-          const path = realpathSync(r.path);
-          if (!inside(root, path))
-            throw failure("PACKAGE_RESOURCE_ESCAPE", "包资源 realpath 越界。");
-          row.resources.push({
-            kind,
-            path,
-            enabled: kind !== "extensions" && r.enabled,
-            ...(kind === "extensions"
-              ? { reason: "JavaScript 扩展尚未适配 agent-sync；未加载。" }
-              : !r.enabled
-                ? { reason: "包资源过滤已禁用。" }
-                : {}),
-          });
+      if (!row.installedPath || !existsSync(row.installedPath)) throw failure("PACKAGE_MISSING", "登记的包安装缺失；list 不安装或修复。");
+      const root = realpathSync(row.installedPath); row.installedPath = root;
+      const parsed = parsePackageSource(row.effectiveSource);
+      if (parsed.type !== "local") {
+        const managed = realpathSync(join(row.installScope === "user" ? agentDir : join(cwd, ".pi"), parsed.type));
+        if (!inside(managed, root)) throw failure("PACKAGE_RESOURCE_ESCAPE", "安装不属于选定受管目录。");
+      }
+      if (lstatSync(root).isDirectory()) {
+        const manifest = existsSync(join(root,"package.json")) ? JSON.parse(readFileSync(join(root,"package.json"),"utf8")) : {};
+        if (parsed.type === "npm" && (manifest.name !== parsed.name || manifest.version !== parsed.version))
+          throw failure("PACKAGE_CONTENT_MISMATCH", "安装内容不符：登记版本与文件不一致。");
+        checkManifest(root, manifest);
+        row.name = manifest.name ?? row.name; row.version = manifest.version ?? row.version;
+        if (manifest.name === "pi-subagents" && manifest.version === "0.84.0") row.compatibility = inspectPluginCompatibility(root);
+        if (parsed.type === "git") {
+          row.commit = execFileSync("git", ["-C",root,"rev-parse","HEAD"],{encoding:"utf8"}).trim();
+          if (Object.keys(manifest.dependencies ?? {}).some(name => !existsSync(join(root,"node_modules",name))))
+            throw failure("PACKAGE_DEPENDENCIES_MISSING", "Git 包依赖缺失；请明确 install 修复，list 不运行依赖安装。");
         }
-      if (!row.resources.length)
-        throw failure("NO_PI_RESOURCES", "包没有可识别的 Pi 资源。");
-      validateDataResources([row], {}, cwd, home);
-      const enabled = row.resources.filter((r) => r.enabled).length;
-      row.status =
-        enabled === row.resources.length
-          ? "enabled"
-          : enabled
-            ? "partial"
-            : "blocked";
-    } catch (error) {
-      row.status = "broken";
-      row.reason = error.message;
-      row.code =
-        error.code?.startsWith("PACKAGE_") || error.code === "NO_PI_RESOURCES"
-          ? error.code
-          : "PACKAGE_RESOURCE_INVALID";
-      row.resources.forEach((r) => (r.enabled = false));
+      }
+      row.status = "blocked";
+    } catch(error) { row.status = error.code === "PACKAGE_MISSING" ? "missing" : "broken"; row.reason = error.message; row.code = error.code ?? "PACKAGE_RESOURCE_INVALID"; }
+  }
+  // Native resolve supplies project override/delta semantics; never feed ambient top-level resources into the runtime.
+  if (!rows.some(row => ["missing","broken"].includes(row.status))) {
+    const found = await manager.resolve(async () => "error");
+    for (const kind of kinds) for (const resource of found[kind]) {
+      const row = rows.find(row => row.source === resource.metadata.source && row.scope === resource.metadata.scope);
+      if (!row || resource.metadata.origin !== "package") continue;
+      const path = realpathSync(resource.path), root = row.installedPath;
+      if (!(path === root || (lstatSync(root).isDirectory() && inside(root,path))))
+        throw failure("PACKAGE_RESOURCE_ESCAPE", "包资源 realpath 越界。");
+      row.resources.push({kind,path,enabled:resource.enabled,...(!resource.enabled ? {reason:"包资源过滤已禁用。"}: {})});
+    }
+    for (const row of rows) {
+      const n = row.resources.filter(r=>r.enabled).length;
+      row.status = n ? (n === row.resources.length ? "enabled" : "partial") : "blocked";
+      if(!row.resources.length && !row.delta && !rows.some(other=>other!==row && other.scope==="project" && other.name===row.name)) {row.status="broken";row.code="NO_PI_RESOURCES";row.reason="包没有可识别的 Pi 资源。";}
     }
   }
-  try {
-    validateDataResources(rows, manual, cwd, home);
-  } catch (error) {
-    for (const row of rows.filter(
-      (r) => r.status !== "missing" && r.status !== "broken",
-    )) {
-      row.status = "broken";
-      row.reason = error.message;
-      row.code = error.code ?? "PACKAGE_RESOURCE_INVALID";
-      row.resources.forEach((r) => (r.enabled = false));
-    }
-    if (!rows.length) throw error;
-  }
+  try { validateDataResources(rows,manual,cwd,home); }
+  catch(error) { if(!rows.length)throw error;for(const row of rows) { row.status="broken"; row.reason=error.message; row.code=error.code?.startsWith("PACKAGE_") ? error.code : "PACKAGE_RESOURCE_INVALID"; for(const r of row.resources)r.enabled=false; } }
   return rows;
 }
 export async function listPackages(options) {
@@ -427,10 +391,13 @@ export async function resolvePackageResources(options) {
       invalid.map((r) => `${r.source}：${r.reason}`).join("\n"),
     );
   const snapshot = {
-    packages: rows.map(({ source, name, version }) => ({
+    project: realpathSync(options.cwd ?? process.cwd()),
+    packages: rows.map(({ source, name, version, compatibility, scope, installedPath, commit }) => ({
+      scope, installedPath, ...(commit ? {commit} : {}),
       source,
       name,
       version,
+      ...(compatibility ? {compatibility} : {}),
     })),
     extensions: [],
     skills: [],
@@ -452,24 +419,18 @@ export async function resolvePackageResources(options) {
 }
 
 export function parsePackageSource(source) {
-  const match =
-    typeof source === "string" &&
-    /^npm:((?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*)(?:@([a-zA-Z0-9][a-zA-Z0-9._+-]*))?$/.exec(
-      source,
-    );
-  if (!match || match[1].split("/").some((p) => p === "." || p === ".."))
-    throw failure(
-      "PACKAGE_USAGE",
-      "仅支持 npm:包名、npm:@scope/包名，可带精确版本或 tag；不支持 Git/URL/本地路径。",
-    );
-  if (/(^|[/@-])(subagents?|agent-teams)([-.]|$)/i.test(match[1]))
-    throw failure(
-      "PACKAGE_FORBIDDEN",
-      "当前用户禁止安装或加载 subagent/agent-teams 插件。",
-    );
-  return { name: match[1], version: match[2] };
+  if (typeof source !== "string" || !source.trim() || /[\x00-\x1f]/.test(source)) throw failure("PACKAGE_USAGE", "包来源不能为空或包含控制字符。");
+  const match = /^npm:((?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*)(?:@([a-zA-Z0-9][a-zA-Z0-9._+-]*))?$/.exec(source);
+  if(match) return {type:"npm", name:match[1], version:match[2]};
+  if(source.startsWith("npm:")) throw failure("PACKAGE_USAGE","无效 npm 来源。");
+  if (/^(git:|https?:\/\/|ssh:\/\/)/.test(source)) {
+    try { const u=new URL(source.replace(/^git:/,"")); if(u.password || (/^https?:$/.test(u.protocol) && u.username))throw failure("PACKAGE_USAGE","Git URL 不接受内嵌凭据；请使用 Git credential helper。"); } catch(error) {if(error.code==="PACKAGE_USAGE")throw error;}
+    if (/\.(?:zip|tgz|tar(?:\.gz)?)(?:[?#]|$)/i.test(source)) throw failure("PACKAGE_USAGE","URL 来源仅支持锁定 Pi 的 Git URL，不支持归档下载。");
+    return {type:"git",name:source};
+  }
+  return {type:"local",name:source};
 }
-
+const absoluteSource = (source, base) => parsePackageSource(source).type === "local" ? resolve(base, source.replace(/^~(?=\/)/, process.env.HOME)) : source;
 // Runs before the model/setup argument parser, including its error path.
 export function parsePackageCommand(args) {
   let command;
@@ -498,7 +459,7 @@ export function parsePackageCommand(args) {
     const parsed = parseArgs({
       args,
       allowPositionals: true,
-      options: { json: { type: "boolean" } },
+      options: { json: { type: "boolean" }, local: { type: "boolean" } },
     });
     const [actual, ...sources] = parsed.positionals;
     if (actual !== command || sources.length !== (command === "list" ? 0 : 1))
@@ -507,7 +468,7 @@ export function parsePackageCommand(args) {
         "包管理用法：cothink install npm:包名 | list | remove npm:包名 [--json]",
       );
     if (sources[0]) parsePackageSource(sources[0]);
-    return { command, source: sources[0], json };
+    return { command, source: sources[0], json, local: parsed.values.local === true };
   } catch (error) {
     return {
       command,
@@ -552,25 +513,27 @@ function treeHash(path) {
 function packageState(agentDir) {
   return {
     npm: treeHash(join(agentDir, "npm")),
+    git: treeHash(join(agentDir, "git")),
     settings: bytesHash(optionalBytes(join(agentDir, "settings.json"))),
   };
 }
 function sameState(a, b) {
-  return a.npm === b.npm && a.settings === b.settings;
+  return a.npm === b.npm && (a.git ?? null) === (b.git ?? null) && a.settings === b.settings;
 }
 
 // Recovery only rolls back a verified interrupted publication. No npm/model retry.
-function recoverOperation(home, lock) {
-  const agentDir = join(home, "pi"),
+function recoverOperation(home, lock, agentDir = join(home, "pi")) {
+  const
     path = join(agentDir, "package-operation.json");
   if (!existsSync(path)) return;
   let j;
   try {
     j = JSON.parse(readFileSync(path, "utf8"));
     if (
-      j.version !== 1 ||
+      ![1,2].includes(j.version) ||
       !/^package-candidate-[0-9a-f-]{36}$/.test(basename(j.candidate)) ||
       resolve(j.candidate) !== join(resolve(agentDir), basename(j.candidate)) ||
+      (j.version===2 && ![j.before?.git,j.after?.git].every(h=>h===null||/^[a-f0-9]{64}$/.test(h))) ||
       !j.before ||
       !j.after ||
       ![j.before.npm, j.before.settings, j.after.npm, j.after.settings].every(
@@ -582,29 +545,30 @@ function recoverOperation(home, lock) {
     )
       throw Error("invalid journal");
     lock.assertOwned();
-    const current = packageState(agentDir),
-      backup = join(j.candidate, "previous-npm"),
-      backupHash = treeHash(backup);
-    if (
-      ![j.before.settings, j.after.settings].includes(current.settings) ||
-      ![null, j.before.npm, j.after.npm].includes(current.npm)
-    )
-      throw Error("independent edit");
-    if (
-      j.before.npm !== null &&
-      current.npm !== j.before.npm &&
-      backupHash !== j.before.npm
-    )
-      throw Error("missing backup");
-    if (backupHash !== null && backupHash !== j.before.npm)
-      throw Error("backup changed");
-    if (current.npm !== j.before.npm) {
-      if (current.npm !== null)
-        renameSync(
-          join(agentDir, "npm"),
-          join(j.candidate, "failed-published-npm"),
-        );
-      if (j.before.npm !== null) renameSync(backup, join(agentDir, "npm"));
+    if(j.homeSettings) {
+      if(j.homeSettings.home!==realpathSync(home))throw Error("recovery belongs to another CoThink data root");
+      const h=j.homeSettings, path=join(home,"pi/settings.json"), current=bytesHash(optionalBytes(path));
+      if(![h.before,h.after].includes(current) || bytesHash(h.oldBytes===null?null:Buffer.from(h.oldBytes,"base64"))!==h.before)throw Error("independent home registration edit");
+
+    }
+    const current = packageState(agentDir);
+    if (![j.before.settings,j.after.settings].includes(current.settings)) throw Error("independent settings edit");
+    for (const slot of j.version === 1 ? ["npm"] : ["npm","git"]) {
+      const before=j.before[slot], after=j.after[slot], backup=join(j.candidate,"previous-"+slot), backupHash=treeHash(backup);
+      if (![null,before,after].includes(current[slot])) throw Error("independent edit");
+      if (before !== null && current[slot] !== before && backupHash !== before) throw Error("missing backup");
+      if (backupHash !== null && backupHash !== before) throw Error("backup changed");
+    }
+    if(j.homeSettings) {
+      const h=j.homeSettings,path=join(home,"pi/settings.json");
+      if(h.oldBytes===null) {if(existsSync(path))unlinkSync(path);} else writePrivateBytes(path,Buffer.from(h.oldBytes,"base64"),lock.assertOwned);
+    }
+    for (const slot of j.version === 1 ? ["npm"] : ["npm","git"]) {
+      const before=j.before[slot],backup=join(j.candidate,"previous-"+slot);
+      if(current[slot] !== before) {
+        if(current[slot] !== null) renameSync(join(agentDir,slot),join(j.candidate,"failed-published-"+slot));
+        if(before !== null) renameSync(backup,join(agentDir,slot));
+      }
     }
     if (j.oldSettings === null) {
       if (existsSync(join(agentDir, "settings.json")))
@@ -639,11 +603,13 @@ async function candidateProcess({
   entries,
   signal,
   onProgress,
+  originalCwd,
+  local = false,
 }) {
   const request = join(candidate, "request.json"),
     result = join(candidate, "result.json"),
     log = join(candidate, "npm.log");
-  writePrivateJson(request, { candidate, command, source, entries });
+  writePrivateJson(request, { candidate, command, source, entries, originalCwd, local });
   const fd = openSync(log, "wx", 0o600);
   let child;
   try {
@@ -771,50 +737,38 @@ async function candidateProcess({
 }
 
 async function manageCandidate(requestPath, resultPath) {
-  const { candidate, command, source, entries } = JSON.parse(
-    readFileSync(requestPath, "utf8"),
-  );
-  const { manager, settings } = packageManager(
-    candidate,
-    entries,
-    command === "remove",
-  );
-  if (command === "install") {
-    const { name, version } = parsePackageSource(source);
-    // npm install <name> otherwise keeps the old exact dependency instead of selecting latest.
-    await manager.install(version ? source : source + "@latest");
-    const manifest = JSON.parse(
-      readFileSync(
-        join(candidate, "npm", "node_modules", name, "package.json"),
-        "utf8",
-      ),
-    );
-    if (
-      manifest.name !== name ||
-      !exactVersion.test(manifest.version) ||
-      (exactVersion.test(version ?? "") && version !== manifest.version)
-    )
-      throw Error("installed package identity mismatch");
-    manager.addSourceToSettings(`npm:${name}@${manifest.version}`);
-    settings.setPackages(
-      settings.getGlobalSettings().packages.map((e) =>
-        parsePackageSource(sourceOf(e)).name === name
-          ? {
-              ...(typeof e === "object" ? e : {}),
-              source: `npm:${name}@${manifest.version}`,
-              extensions: [],
-            }
-          : e,
-      ),
-    );
+  const { candidate, command, source, entries, originalCwd, local } = JSON.parse(readFileSync(requestPath,"utf8"));
+  const candidateCwd = local ? join(candidate,"project") : originalCwd;
+  if(local) privateDirectory(join(candidateCwd,".pi"));
+  const {manager,settings} = packageManager(candidate, local ? [] : entries, command === "remove", candidateCwd, local ? entries : []);
+  const options={local};
+  if(command === "install") {
+    const parsed=parsePackageSource(source);
+    await manager.install(parsed.type === "npm" && !parsed.version ? source+"@latest" : source,options);
+    let registered=source;
+    if(parsed.type === "npm") {
+      const root=manager.getInstalledPath(source,local?"project":"user");
+      const manifest=JSON.parse(readFileSync(join(root,"package.json"),"utf8"));
+      if(manifest.name!==parsed.name || !exactVersion.test(manifest.version) || (exactVersion.test(parsed.version??"") && parsed.version!==manifest.version)) throw Error("installed package identity mismatch");
+      registered=`npm:${parsed.name}@${manifest.version}`;
+    }
+    manager.addSourceToSettings(registered,options);
   } else {
-    await manager.remove(source);
-    manager.removeSourceFromSettings(source);
+    await manager.remove(source,options); manager.removeSourceFromSettings(source,options);
   }
+  // Serialize local links against their final settings location, never the candidate directory.
+  const values=(local ? settings.getProjectSettings() : settings.getGlobalSettings()).packages ?? [];
+  const corrected=values.map(entry=>{
+    const raw=sourceOf(entry);
+    if(parsePackageSource(raw).type!=="local")return typeof entry === "string" ? {source:entry} : entry;
+    const original=absoluteSource(raw,local?join(candidateCwd,".pi"):candidate);
+    return typeof entry === "string" ? {source:original} : {...entry,source:original};
+  });
+  if(local)settings.setProjectPackages(corrected);else settings.setPackages(corrected);
   await settings.flush();
   if (settings.drainErrors().length) throw Error("Pi settings write failed");
   writePrivateJson(resultPath, {
-    packages: settings.getGlobalSettings().packages ?? [],
+    packages: (local ? settings.getProjectSettings() : settings.getGlobalSettings()).packages ?? [],
   });
 }
 
@@ -825,15 +779,18 @@ export async function runPackageCommand({
   source,
   signal,
   onProgress = () => {},
+  local = false,
 }) {
-  let lock, candidate, recoveryPath;
+  let lock, targetLock, candidate, recoveryPath;
   const result = { command, packages: [] };
   try {
     if (!commands.has(command))
       throw failure("PACKAGE_USAGE", "未知包管理命令。");
+    if(source)source=absoluteSource(source,cwd);
     const parsed = command === "list" ? null : parsePackageSource(source);
+    if(command === "install" && parsed.type === "local" && !existsSync(source))throw failure("PACKAGE_USAGE","本地包来源不存在。");
     lock = acquirePackageLock(home);
-    const agentDir = join(home, "pi"),
+    const agentDir = local ? join(realpathSync(cwd), ".pi") : join(home, "pi"),
       journal = join(agentDir, "package-operation.json");
     if (command === "list") {
       if (existsSync(journal))
@@ -844,56 +801,83 @@ export async function runPackageCommand({
       result.packages = await inspectPackages({ home, cwd });
       return { exitCode: 0, result };
     }
+    if(local) {
+      if(existsSync(agentDir) && lstatSync(agentDir).isSymbolicLink())throw failure("PACKAGE_STORAGE","项目 .pi 不能是符号链接。");
+      privateDirectory(agentDir); targetLock=acquirePackageLock(home,{agentDir});
+    }
     assertNoActivePiSessions(home);
-    recoveryPath = recoverOperation(home, lock);
+    if(local)assertNoActivePiSessions(home,{agentDir});
+    recoveryPath = recoverOperation(home, lock, agentDir);
     const original = readSettings(agentDir),
       manual = manualResources(home),
-      oldSettings = optionalBytes(join(agentDir, "settings.json"));
-    const before = packageState(agentDir),
-      entry = (original.packages ?? []).find(
-        (e) => parsePackageSource(sourceOf(e)).name === parsed.name,
+      oldSettings = optionalBytes(join(agentDir, "settings.json")),
+      oldHomeSettings=local?optionalBytes(join(home,"pi/settings.json")):null;
+    const before = packageState(agentDir);
+    let entry = (original.packages ?? []).find(
+        (e) => { const p=parsePackageSource(sourceOf(e)); return parsed.type === "npm" ? p.type === "npm" && p.name === parsed.name : absoluteSource(sourceOf(e),agentDir) === source; },
       );
+    if(!entry && parsed.type!=="npm") {
+      const probe=packageManager(agentDir,original.packages??[],true,dirname(agentDir));
+      const sourcesBefore=probe.settings.getGlobalSettings().packages??[];
+      probe.manager.removeSourceFromSettings(source);
+      const sourcesAfter=probe.settings.getGlobalSettings().packages??[];
+      entry=sourcesBefore.find(e=>!sourcesAfter.includes(e));
+    }
     if (before.npm !== null) checkTree(realpathSync(join(agentDir, "npm")));
     if (command === "remove" && !entry) {
-      result.packages = await inspectPackages({ home, cwd });
+      result.packages = await inspectPackages({ home, cwd, management:true });
       return { exitCode: 0, result };
     }
     if (
       command === "install" &&
-      exactVersion.test(parsed.version ?? "") &&
+      parsed.type === "npm" && exactVersion.test(parsed.version ?? "") &&
+      (!local || readSettings(join(home,"pi")).cothinkProjects?.[realpathSync(cwd)]===digest(JSON.stringify(original.packages??[]))) &&
       entry &&
       parsePackageSource(sourceOf(entry)).version === parsed.version
     ) {
-      const rows = await inspectPackages({ home, cwd });
-      if (rows.every((r) => !["missing", "broken"].includes(r.status))) {
+      const rows = await inspectPackages({ home, cwd, management:true });
+      if (rows.every((r) => !["missing", "broken"].includes(r.status) &&
+        (r.name !== "pi-subagents" || r.version !== "0.84.0" || r.compatibility?.revision === pluginCompatibilityRevision))) {
         result.packages = rows;
         return { exitCode: 0, result };
       }
     }
     candidate = join(agentDir, `package-candidate-${randomUUID()}`);
     privateDirectory(candidate);
-    if (before.npm !== null)
-      cpSync(join(agentDir, "npm"), join(candidate, "npm"), {
+    if(local)privateDirectory(join(candidate,"project/.pi"));
+    for(const slot of ["npm","git"]) if (before[slot] !== null)
+      cpSync(join(agentDir, slot), join(local ? join(candidate,"project/.pi") : candidate, slot), {
         recursive: true,
         dereference: false,
         verbatimSymlinks: true,
       });
+    if(local)privateDirectory(join(candidate,"project/.pi"));
+    const candidateAgent=local?join(candidate,"project/.pi"):candidate;
+    // Validate/transition copied known bytes before npm can replace an up-to-date or
+    // locally modified installed tree. The original installation is still untouched.
+    if(command === "install") preparePluginCompatibility(candidateAgent);
     const changed = await candidateProcess({
       candidate,
       command,
       source,
       entries: original.packages ?? [],
       signal,
-      onProgress,
+      onProgress, originalCwd:cwd, local,
     });
     const next = { ...original, packages: changed.packages };
+    const homeValue=oldHomeSettings ? JSON.parse(oldHomeSettings.toString("utf8")) : {};
+    const nextHome=local?{...homeValue,cothinkProjects:{...homeValue.cothinkProjects,[realpathSync(cwd)]:digest(JSON.stringify(changed.packages))}}:null;
+    preparePluginCompatibility(candidateAgent);
     const rows = await inspectPackages({
-      home,
-      cwd,
-      agentDir: candidate,
-      settings: next,
+      home, management:true,
+      cwd: local ? join(candidate,"project") : cwd,
+      agentDir: local ? join(home,"pi") : candidate,
+      settings: local ? nextHome : next,
+      ...(local ? {projectSettings:next} : {}),
+      authorizedProject: local,
       manual,
     });
+    next.cothinkPackageProvenance=rows.filter(r=>r.scope===(local?"project":"user")).map(({source,type,commit,compatibility})=>({source,type,...(commit?{commit}:{}),...(compatibility?{compatibility}:{})}));
     const bad = rows.find((r) => ["missing", "broken"].includes(r.status));
     if (bad)
       throw failure(
@@ -903,12 +887,15 @@ export async function runPackageCommand({
     if (signal?.aborted)
       throw failure("PACKAGE_CANCELLED", "包操作已取消；候选未发布。");
     lock.assertOwned();
+    targetLock?.assertOwned();
     assertNoActivePiSessions(home);
+    if(local)assertNoActivePiSessions(home,{agentDir});
     if (JSON.stringify(manualResources(home)) !== JSON.stringify(manual))
       throw failure(
         "PACKAGE_RESOURCE_CONFLICT",
         "安装期间全局 piResources 已改变；未发布候选。",
       );
+    if(local && bytesHash(optionalBytes(join(home,"pi/settings.json")))!==bytesHash(oldHomeSettings))throw failure("PACKAGE_CONFLICT","个人包登记在项目安装期间被独立修改；未发布。");
     if (!sameState(packageState(agentDir), before))
       throw failure(
         "PACKAGE_CONFLICT",
@@ -916,36 +903,39 @@ export async function runPackageCommand({
       );
     writePrivateJson(join(candidate, "next-settings.json"), next);
     const after = {
-      npm: treeHash(join(candidate, "npm")),
+      npm: treeHash(join(candidateAgent, "npm")),
+      git: treeHash(join(candidateAgent, "git")),
       settings: bytesHash(readFileSync(join(candidate, "next-settings.json"))),
     };
     writePrivateJson(
       journal,
       {
-        version: 1,
+        version: 2,
         candidate,
         before,
         after,
         oldSettings:
           oldSettings === null ? null : oldSettings.toString("base64"),
+        ...(local ? {homeSettings:{home:realpathSync(home),before:bytesHash(oldHomeSettings),oldBytes:oldHomeSettings?.toString("base64") ?? null,after:bytesHash(Buffer.from(JSON.stringify(nextHome,null,2)+"\n"))}} : {}),
       },
       lock.assertOwned,
     );
     try {
-      if (before.npm !== null)
-        renameSync(join(agentDir, "npm"), join(candidate, "previous-npm"));
-      if (after.npm !== null)
-        renameSync(join(candidate, "npm"), join(agentDir, "npm"));
+      for(const slot of ["npm","git"]) {
+        if(before[slot]!==null)renameSync(join(agentDir,slot),join(candidate,"previous-"+slot));
+        if(after[slot]!==null)renameSync(join(candidateAgent,slot),join(agentDir,slot));
+      }
       writePrivateJson(join(agentDir, "settings.json"), next, lock.assertOwned);
       if (!sameState(packageState(agentDir), after))
         throw Error("publication verification failed");
+      if(local)writePrivateJson(join(home,"pi/settings.json"),nextHome,lock.assertOwned);
       // Verify all paths after relocation, before declaring success or removing recovery evidence.
-      result.packages = await inspectPackages({ home, cwd });
+      result.packages = await inspectPackages({ home, cwd, management:true });
       if (result.packages.some((r) => ["missing", "broken"].includes(r.status)))
         throw Error("published resource validation failed");
       unlinkSync(journal);
     } catch (error) {
-      recoveryPath = recoverOperation(home, lock);
+      recoveryPath = recoverOperation(home, lock, agentDir);
       throw failure(
         "PACKAGE_COMMIT_FAILED",
         "发布失败，已核验回退到上一稳定包状态；失败现场保留。",
@@ -979,6 +969,7 @@ export async function runPackageCommand({
       },
     };
   } finally {
+    targetLock?.release();
     lock?.release();
   }
 }
@@ -991,7 +982,7 @@ export function formatPackageResult(result) {
     result.packages
       .map(
         (p) =>
-          `${p.name}@${p.version}：${p.status}${p.installedPath ? "\n安装路径：" + p.installedPath : ""}\n已启用 ${p.resources.filter((r) => r.enabled).length} 项资源${p.reason ? "；" + p.reason : ""}${p.resources
+          `${p.name}${p.version ? "@"+p.version : ""} [${p.scope ?? "user"}]：${p.status}${p.installedPath ? "\n安装路径：" + p.installedPath : ""}\n已启用 ${p.resources.filter((r) => r.enabled).length} 项资源${p.reason ? "；" + p.reason : ""}${p.resources
             .filter((r) => !r.enabled)
             .map((r) => "\n未启用 " + r.kind + "：" + r.reason)
             .join("")}`,

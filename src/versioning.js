@@ -43,6 +43,17 @@ export async function createVersioning({
 export const inScope = (path, scope) =>
   scope.some((p) => p === "." || p === path || path.startsWith(p + "/"));
 
+// Consumer coordination only. The kernel remains authoritative for versions and permissions.
+const changeQueues = new WeakMap();
+export function withChangeQueue(versioning, changeId, operation) {
+  let queues = changeQueues.get(versioning);
+  if (!queues) changeQueues.set(versioning, queues = new Map());
+  const run = (queues.get(changeId) ?? Promise.resolve()).catch(() => {}).then(operation);
+  queues.set(changeId, run);
+  void run.finally(() => { if (queues.get(changeId) === run) queues.delete(changeId); }).catch(() => {});
+  return run;
+}
+
 /** Explicit CoThink legacy handoff. No model, checks, merge or user checkout mutation. */
 export async function migrateLegacyProject({
   project,

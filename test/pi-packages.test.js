@@ -1,10 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
-import { join } from "node:path";
+import { readFileSync, writeFileSync, mkdirSync, existsSync, realpathSync } from "node:fs";
+import { join, resolve } from "node:path";
+import {fileURLToPath,pathToFileURL} from "node:url";
 import { fixture } from "./helpers/pi-fixture.js";
 import { invoke } from "./helpers/cli-fixture.js";
-import { createTeamConfig } from "../src/teams.js";
+const productRoot=resolve(process.env.COTHINK_TEST_PACKAGE_ROOT??fileURLToPath(new URL("..",import.meta.url)));
+const load=path=>import(pathToFileURL(join(productRoot,path)));
+const {createTeamConfig}=await load("src/teams.js");
 
 // Removing the early management dispatcher must fail these checks before setup/model use.
 test("P0 package commands dispatch without configuration, migration or model calls; preserve team/auth/session bytes", async (t) => {
@@ -69,14 +72,9 @@ test("P0 invalid and forbidden management inputs stay local, with JSON errors an
   for (const args of [
     ["install"],
     ["install", "npm:x", "npm:y"],
-    ["install", "npm:x", "--local"],
-    ["install", "git:https://example.test/x"],
-    ["install", "https://example.test/x"],
+    ["install", "https://example.test/x.zip"],
     ["install", "npm:../x"],
     ["install", "npm:x@https://example.test/a"],
-    ["install", "npm:@scope/subagent"],
-    ["install", "npm:pi-subagents"],
-    ["install", "npm:@fradser/pi-agent-teams"],
     ["list", "npm:x"],
     ["list", "--one"],
     ["remove"],
@@ -106,7 +104,7 @@ test("P0 explicit ask list these items remains an ordinary answer", async (t) =>
 // A missing/foreign install must never be repaired or imported by listing.
 test("P1 list validates managed ownership/version and settings without importing local extensions or contacting models", async (t) => {
   const { listPackages, resolvePackageResources } =
-    await import("../src/packages.js");
+    await load("src/packages.js");
   const f = await fixture(t);
   const pkg = join(
     f.home,
@@ -155,7 +153,7 @@ test("P1 list validates managed ownership/version and settings without importing
   assert.ok(rows[0].resources.some((r) => r.kind === "skills" && r.enabled));
   assert.ok(
     rows[0].resources.some(
-      (r) => r.kind === "extensions" && !r.enabled && /适配/.test(r.reason),
+      (r) => r.kind === "extensions" && !r.enabled && /禁用/.test(r.reason),
     ),
   );
   const snap = await resolvePackageResources({ home: f.home, cwd: f.cwd });
@@ -180,8 +178,8 @@ test("P1 list validates managed ownership/version and settings without importing
   await assert.rejects(listPackages({ home: f.home, cwd: f.cwd }), /登记/);
 });
 
-test("P2 real Pi/npm installs pin actual version, skip scripts/import, preserve unrelated packages, and remove idempotently", async (t) => {
-  const { runPackageCommand } = await import("../src/packages.js");
+test("P2 real Pi/npm installs pin actual version, run lifecycle scripts without importing extensions, preserve unrelated packages, and remove idempotently", async (t) => {
+  const { runPackageCommand } = await load("src/packages.js");
   const { packageRegistry } = await import("./helpers/package-registry.mjs");
   const f = await fixture(t),
     reg = await packageRegistry(t, { markerRoot: f.home });
@@ -189,14 +187,14 @@ test("P2 real Pi/npm installs pin actual version, skip scripts/import, preserve 
     runPackageCommand({ home: f.home, cwd: f.cwd, command, source });
   let r = await run("install", "npm:@cothink-fixtures/mixed@1.0.0");
   assert.equal(r.exitCode, 0, JSON.stringify(r));
-  assert.equal(r.result.packages[0].status, "partial");
+  assert.equal(r.result.packages[0].status, "enabled");
   assert.equal(existsSync(join(f.home, "import-marker")), false);
   const settings = JSON.parse(readFileSync(join(f.home, "pi/settings.json")));
   assert.equal(
     settings.packages[0].source,
     "npm:@cothink-fixtures/mixed@1.0.0",
   );
-  assert.deepEqual(settings.packages[0].extensions, []);
+  assert.equal(settings.packages[0].extensions, undefined);
   const count = reg.registryRequests.length;
   r = await run("install", "npm:@cothink-fixtures/mixed@1.0.0");
   assert.equal(r.exitCode, 0);
@@ -220,8 +218,8 @@ test("P2 real Pi/npm installs pin actual version, skip scripts/import, preserve 
   }
   r = await run("install", "npm:@cothink-fixtures/hook");
   assert.equal(r.exitCode, 0, JSON.stringify(r));
-  assert.equal(existsSync(join(f.home, "root-script-marker")), false);
-  assert.equal(existsSync(join(f.home, "dependency-script-marker")), false);
+  assert.equal(existsSync(join(f.home, "root-script-marker")), true);
+  assert.equal(existsSync(join(f.home, "dependency-script-marker")), true);
   assert.ok(existsSync(join(f.home, "pi/npm/package-lock.json")));
   r = await run("remove", "npm:@cothink-fixtures/mixed");
   assert.equal(r.exitCode, 0, JSON.stringify(r));
@@ -239,7 +237,7 @@ test("P2 real Pi/npm installs pin actual version, skip scripts/import, preserve 
 });
 
 test("P2 failed/conflicting/escaping/non-Pi candidates retain previous installation and never overwrite team/auth", async (t) => {
-  const { runPackageCommand } = await import("../src/packages.js");
+  const { runPackageCommand } = await load("src/packages.js");
   const { packageRegistry } = await import("./helpers/package-registry.mjs");
   const f = await fixture(t),
     reg = await packageRegistry(t);
@@ -278,9 +276,9 @@ test("P2 failed/conflicting/escaping/non-Pi candidates retain previous installat
 });
 
 test("P2 locks cover every idle team session; list works; config-write is separate; explicit install updates exact pin", async (t) => {
-  const { runPackageCommand } = await import("../src/packages.js");
+  const { runPackageCommand } = await load("src/packages.js");
   const { acquireSessionWriter, acquirePackageLock, assertPackageReadable } =
-    await import("../src/storage.js");
+    await load("src/storage.js");
   const { packageRegistry } = await import("./helpers/package-registry.mjs");
   const f = await fixture(t);
   await packageRegistry(t);
@@ -316,7 +314,7 @@ test("P2 locks cover every idle team session; list works; config-write is separa
 });
 
 test("P2 publication rejects external settings/resource edits but allows team-only writes; cancellation leaves candidate unpublished", async (t) => {
-  const { runPackageCommand } = await import("../src/packages.js");
+  const { runPackageCommand } = await load("src/packages.js");
   const { packageRegistry } = await import("./helpers/package-registry.mjs");
   const f = await fixture(t),
     reg = await packageRegistry(t);
@@ -405,9 +403,9 @@ test("P2 publication rejects external settings/resource edits but allows team-on
 });
 
 test("P3 package skill/prompt flows through real one/three-call host, frozen review and team snapshots; missing packages block generation only", async (t) => {
-  const { runPackageCommand } = await import("../src/packages.js");
+  const { runPackageCommand } = await load("src/packages.js");
   const { packageRegistry } = await import("./helpers/package-registry.mjs");
-  const { runTurn } = await import("../src/discussion.js");
+  const { runTurn } = await load("src/discussion.js");
   const f = await fixture(t);
   await packageRegistry(t);
   assert.equal(
@@ -493,7 +491,7 @@ test("P3 package skill/prompt flows through real one/three-call host, frozen rev
 });
 
 test("P2 real process death between directory renames blocks reads until explicit, verified rollback; write failure rolls back", async (t) => {
-  const { runPackageCommand } = await import("../src/packages.js");
+  const { runPackageCommand } = await load("src/packages.js");
   const { packageRegistry } = await import("./helpers/package-registry.mjs");
   const { spawn } = await import("node:child_process");
   const f = await fixture(t);
@@ -578,7 +576,7 @@ test("P2 real process death between directory renames blocks reads until explici
 
 test("P2 package-external symlinks and corrupt recovery evidence fail closed without importing or overwriting", async (t) => {
   const { runPackageCommand, resolvePackageResources } =
-    await import("../src/packages.js");
+    await load("src/packages.js");
   const { symlinkSync } = await import("node:fs");
   const f = await fixture(t);
   const pkg = join(f.home, "pi/npm/node_modules/escape");
@@ -629,11 +627,11 @@ test("P2 package-external symlinks and corrupt recovery evidence fail closed wit
 });
 
 test("P3 runtime claims before any package read, blocks mutations while idle, and retains a usable local shell on package fault", async (t) => {
-  const { createRuntime } = await import("../src/pi-runtime.js");
-  const { runPackageCommand } = await import("../src/packages.js");
+  const { createRuntime } = await load("src/pi-runtime.js");
+  const { runPackageCommand } = await load("src/packages.js");
   const { packageRegistry } = await import("./helpers/package-registry.mjs");
   const { assertNoActivePiSessions, acquirePackageLock, acquireSessionWriter } =
-    await import("../src/storage.js");
+    await load("src/storage.js");
   const { default: fs } = await import("node:fs");
   const { syncBuiltinESMExports } = await import("node:module");
   const f = await fixture(t);
@@ -698,7 +696,7 @@ test("P3 runtime claims before any package read, blocks mutations while idle, an
       0,
     );
   } finally {
-    rt.dispose();
+    await rt.dispose();
   }
   const configLock = acquireSessionWriter(
     join(f.home, "config-write"),
@@ -743,7 +741,7 @@ test("P3 runtime claims before any package read, blocks mutations while idle, an
     assert.equal(rt.services.resourceLoader.getSkills().skills.length, 0);
     await assert.rejects(rt.checkPackages(), /缺失/);
   } finally {
-    rt.dispose();
+    await rt.dispose();
   }
   assert.equal(f.calls.length, 0);
 });
@@ -766,7 +764,7 @@ test("P4 actual CLI install/list/PTY-use/remove; original Team lifecycle matrix 
     "--json",
   ]);
   assert.equal(r.code, 0, r.stdout + r.stderr);
-  assert.equal(JSON.parse(r.stdout).packages[0].status, "partial");
+  assert.equal(JSON.parse(r.stdout).packages[0].status, "enabled");
   assert.equal(readFileSync(join(f.home, "config.json"), "utf8"), before);
   const python = async (path, extra = {}) => {
     const child = spawn("python3", [new URL(path, import.meta.url).pathname], {
@@ -790,7 +788,7 @@ test("P4 actual CLI install/list/PTY-use/remove; original Team lifecycle matrix 
   );
   for (const c of f.calls)
     assert.match(JSON.stringify(c.body), /PACKAGE_SKILL_BODY/);
-  assert.equal(existsSync(join(f.home, "import-marker")), false);
+  assert.equal(existsSync(join(f.home, "import-marker")), true);
   r = await invoke(f, ["remove", "npm:@cothink-fixtures/mixed", "--json"]);
   assert.equal(r.code, 0, r.stdout + r.stderr);
   r = await invoke(f, ["list", "--json"]);
@@ -817,7 +815,7 @@ test("P4 actual CLI install/list/PTY-use/remove; original Team lifecycle matrix 
 });
 
 test("P2 a preexisting npm-prefix symlink cannot redirect candidate installation into a foreign directory", async (t) => {
-  const { runPackageCommand } = await import("../src/packages.js");
+  const { runPackageCommand } = await load("src/packages.js");
   const { packageRegistry } = await import("./helpers/package-registry.mjs");
   const { symlinkSync } = await import("node:fs");
   const f = await fixture(t),
@@ -881,7 +879,7 @@ test("P0/P2 successful real CLI package mutations ignore unusable/unnamed models
       assert.equal(result.code, 0, result.stdout + result.stderr);
       const data = JSON.parse(result.stdout);
       if (args[0] !== "remove")
-        assert.equal(data.packages[0].status, "blocked");
+        assert.equal(data.packages[0].status, "enabled");
       assert.deepEqual(bytes(), before);
     }
     assert.equal(f.calls.length, 0);
@@ -890,7 +888,7 @@ test("P0/P2 successful real CLI package mutations ignore unusable/unnamed models
 
 test("P1 filters and manual name collisions remain authoritative; global fallback and local resource side effects cannot repair a missing managed package", async (t) => {
   const { runPackageCommand, resolvePackageResources } =
-    await import("../src/packages.js");
+    await load("src/packages.js");
   const { packageRegistry } = await import("./helpers/package-registry.mjs");
   const { chmodSync } = await import("node:fs");
   const f = await fixture(t),
@@ -977,9 +975,9 @@ test("P1 filters and manual name collisions remain authoritative; global fallbac
 });
 
 test("P3 work leader/member reuse frozen package material and never discover candidate .pi resources", async (t) => {
-  const { runTurn } = await import("../src/discussion.js");
+  const { runTurn } = await load("src/discussion.js");
   const { packageRegistry } = await import("./helpers/package-registry.mjs");
-  const { runPackageCommand } = await import("../src/packages.js");
+  const { runPackageCommand } = await load("src/packages.js");
   const { repository, git } = await import("./helpers/git-fixture.js");
   const repo = repository(t);
   let leader = 0;
@@ -992,8 +990,8 @@ test("P3 work leader/member reuse frozen package material and never discover can
     if (leader === 2)
       return tool("delegate", {
         model: "fixture/r1",
-        task: "observe a.txt",
-        materials: "read-only observation",
+        assignment: "observe a.txt",
+        implementationAdvice: "read-only observation",
         reason: "independent view",
         scope: [],
         readOnly: true,
@@ -1050,7 +1048,7 @@ test("P3 work leader/member reuse frozen package material and never discover can
       /CANDIDATE_SKILL|untrusted-skill/,
     );
   }
-  assert.equal(existsSync(join(f.home, "import-marker")), false);
+  assert.equal(existsSync(join(f.home, "import-marker")), true);
   assert.equal(existsSync(join(f.home, "candidate-import-marker")), false);
   assert.ok(
     task.record.stages.every((s) =>
@@ -1062,7 +1060,7 @@ test("P3 work leader/member reuse frozen package material and never discover can
 });
 
 test("P1 malformed prompt data and invalid global resource fields are diagnosed locally before publication", async (t) => {
-  const { runPackageCommand } = await import("../src/packages.js");
+  const { runPackageCommand } = await load("src/packages.js");
   const { packageRegistry } = await import("./helpers/package-registry.mjs");
   const f = await fixture(t),
     reg = await packageRegistry(t);
@@ -1097,7 +1095,7 @@ test("P1 malformed prompt data and invalid global resource fields are diagnosed 
 });
 
 test("P2 removing a registered but missing package clears its registration without reinstalling", async (t) => {
-  const { runPackageCommand } = await import("../src/packages.js");
+  const { runPackageCommand } = await load("src/packages.js");
   const f = await fixture(t);
   writeFileSync(
     join(f.home, "pi/settings.json"),
@@ -1117,4 +1115,118 @@ test("P2 removing a registered but missing package clears its registration witho
   assert.deepEqual(r.result.packages, []);
   assert.equal(existsSync(join(f.home, "pi/npm")), false);
   assert.equal(f.calls.length, 0);
+});
+
+test("native local sources preserve originals, share project selection and reject forged project consent", async t => {
+  const {runPackageCommand,resolvePackageResources}=await load('src/packages.js');
+  const {createRuntime}=await load('src/pi-runtime.js');
+  const f=await fixture(t), root=join(f.cwd,'local-package');
+  mkdirSync(root,{recursive:true});
+  writeFileSync(join(root,'package.json'),JSON.stringify({name:'native-local',version:'1.0.0',pi:{extensions:['index.js']}}));
+  const code='export default pi=>pi.registerCommand("local-command",{handler:async()=>{}});';
+  writeFileSync(join(root,'index.js'),code);
+  const run=(command,source,local=false)=>runPackageCommand({home:f.home,cwd:f.cwd,command,source,local});
+  let result=await run('install','./local-package');
+  assert.equal(result.exitCode,0,JSON.stringify(result));
+  assert.equal(result.result.packages[0].installedPath,realpathSync(root));
+  assert.equal(result.result.packages[0].scope,'user');
+  result=await run('install','./local-package',true);
+  assert.equal(result.exitCode,0,JSON.stringify(result));
+  const selected=await resolvePackageResources({home:f.home,cwd:f.cwd});
+  assert.deepEqual(selected.extensions,[realpathSync(join(root,'index.js'))]);
+  assert.ok(selected.packages.some(p=>p.scope==='project'&&p.installedPath===realpathSync(root)));
+  const other=await fixture(t);
+  const forged=JSON.parse(readFileSync(join(f.cwd,'.pi/settings.json'),'utf8'));
+  forged.cothinkManagedPackages=true;
+  mkdirSync(join(other.cwd,'.pi'),{recursive:true});writeFileSync(join(other.cwd,'.pi/settings.json'),JSON.stringify(forged));
+  assert.deepEqual((await resolvePackageResources({home:other.home,cwd:other.cwd})).extensions,[]);
+  writeFileSync(join(other.cwd,'.pi/package-operation.json'),'{}');
+  const ambient=await createRuntime({home:other.home,cwd:other.cwd,modelRef:other.models.main});await ambient.dispose();
+  const rt=await createRuntime({home:f.home,cwd:f.cwd,modelRef:f.models.main});
+  try {assert.equal((await run('remove','./local-package',true)).result.error.code,'PACKAGE_SESSION_BUSY');}
+  finally {await rt.dispose();}
+  const journal=join(f.cwd,'.pi/package-operation.json');writeFileSync(journal,'{}');
+  const shell=await createRuntime({home:f.home,cwd:f.cwd,modelRef:f.models.main,allowPackageErrors:true});
+  try {assert.equal(shell.packageError.code,'PACKAGE_RECOVERY_REQUIRED');await assert.rejects(shell.checkPackages(),{code:'PACKAGE_RECOVERY_REQUIRED'});assert.equal(readFileSync(journal,'utf8'),'{}');}
+  finally {await shell.dispose();}
+  const {unlinkSync}=await import('node:fs');unlinkSync(journal);
+  result=await run('remove','./local-package',true);
+  assert.equal(result.exitCode,0,JSON.stringify(result));
+  assert.equal((await resolvePackageResources({home:f.home,cwd:f.cwd})).packages.length,1);
+  assert.equal((await run('remove','./local-package')).exitCode,0);
+  assert.equal(readFileSync(join(root,'index.js'),'utf8'),code);
+  const single=join(f.cwd,'single-extension.js');writeFileSync(single,code);
+  result=await run('install','./single-extension.js');assert.equal(result.exitCode,0,JSON.stringify(result));assert.equal(result.result.packages[0].resources[0].path,realpathSync(single));
+  assert.equal((await run('remove','./single-extension.js')).exitCode,0);assert.equal(readFileSync(single,'utf8'),code);
+  assert.equal(f.calls.length,0);
+});
+
+test("native Git URL/ref user and project installation runs build and records commit without list repairs", async t=>{
+  const {execFileSync}=await import('node:child_process');
+  const {createServer}=await import('node:http');
+  const {runPackageCommand}=await load('src/packages.js');
+  const f=await fixture(t), source=join(f.cwd,'seed'), published=join(f.cwd,'http/owner/pkg.git');
+  mkdirSync(source,{recursive:true});mkdirSync(join(f.cwd,'http/owner'),{recursive:true});
+  const git=(cwd,...args)=>execFileSync('git',['-C',cwd,...args],{encoding:'utf8',stdio:'pipe'});
+  git(source,'init');git(source,'config','user.email','fixture@example.invalid');git(source,'config','user.name','Fixture');
+  writeFileSync(join(source,'package.json'),JSON.stringify({name:'git-package',version:'1.0.0',scripts:{postinstall:"node -e \"require('fs').writeFileSync('built.txt','yes')\""},pi:{extensions:['index.js']}}));
+  writeFileSync(join(source,'index.js'),'export default pi=>pi.registerCommand("git-command",{handler:async()=>{}});');
+  git(source,'status','--porcelain');git(source,'add','package.json','index.js');git(source,'commit','-m','fixture');
+  const commit=git(source,'rev-parse','HEAD').trim();
+  execFileSync('git',['clone','--bare',source,published],{stdio:'pipe'});git(published,'update-server-info');
+  const httpRoot=join(f.cwd,'http');let requests=0;
+  const server=createServer((req,res)=>{requests++;const path=join(httpRoot,new URL(req.url,'http://fixture').pathname);try{res.end(readFileSync(path));}catch{res.statusCode=404;res.end();}});
+  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));t.after(()=>new Promise(resolve=>server.close(resolve)));
+  const url=`http://127.0.0.1:${server.address().port}/owner/pkg.git@${commit}`;
+  const run=(command,local=false)=>runPackageCommand({home:f.home,cwd:f.cwd,command,source:command==='list'?undefined:url,local});
+  for(const local of [false,true]) {
+    const result=await run('install',local);assert.equal(result.exitCode,0,JSON.stringify(result));
+    const row=result.result.packages.find(p=>p.scope===(local?'project':'user'));
+    assert.equal(row.commit,commit);assert.equal(readFileSync(join(row.installedPath,'built.txt'),'utf8'),'yes');
+    const count=requests;assert.equal((await run('list')).exitCode,0);assert.equal(requests,count);
+  }
+  // Reuse the existing rename-preload crash mechanism at the new project Git publication boundary.
+  const {spawn}=await import('node:child_process');const {unlinkSync}=await import('node:fs');
+  const beforeHome=readFileSync(join(f.home,'pi/settings.json'),'utf8'),beforeProject=readFileSync(join(f.cwd,'.pi/settings.json'),'utf8');
+  writeFileSync(join(source,'index.js'),readFileSync(join(source,'index.js'),'utf8')+'\n// next revision');
+  git(source,'status','--porcelain');git(source,'add','index.js');git(source,'commit','-m','second fixture');
+  const nextCommit=git(source,'rev-parse','HEAD').trim();git(published,'fetch',source,'HEAD:refs/heads/next');git(published,'update-server-info');
+  const nextUrl=url.replace(commit,nextCommit),preload=join(f.home,'interrupt-project-git.mjs'),target=join(realpathSync(f.cwd),'.pi/git');
+  writeFileSync(preload,`import fs from 'node:fs';import{syncBuiltinESMExports}from'node:module';const original=fs.renameSync;fs.renameSync=(a,b)=>{const result=original(a,b);if(String(b)===${JSON.stringify(target)})process.kill(process.pid,'SIGKILL');return result;};syncBuiltinESMExports();`);
+  const child=spawn(process.execPath,['--import',preload,process.env.COTHINK_TEST_CLI??new URL('../bin/cothink.js',import.meta.url).pathname,'install',nextUrl,'--local','--json'],{cwd:f.cwd,env:{...process.env,COTHINK_HOME:f.home},stdio:['ignore','ignore','pipe']});
+  await new Promise((resolve,reject)=>{child.once('close',resolve);child.once('error',reject);});assert.equal(child.signalCode,'SIGKILL');
+  const journal=join(f.cwd,'.pi/package-operation.json');assert.equal(JSON.parse(readFileSync(journal)).version,2);
+  const other=await fixture(t);
+  const wrong=await runPackageCommand({home:other.home,cwd:f.cwd,command:'remove',source:'npm:absent',local:true});
+  assert.equal(wrong.result.error.code,'PACKAGE_RECOVERY_REQUIRED');assert.equal(readFileSync(join(f.home,'pi/settings.json'),'utf8'),beforeHome);
+  const external=join(target,'external-edit.txt');writeFileSync(external,'preserve');
+  const conflict=await runPackageCommand({home:f.home,cwd:f.cwd,command:'remove',source:'npm:absent',local:true});
+  assert.equal(conflict.result.error.code,'PACKAGE_RECOVERY_REQUIRED');assert.equal(readFileSync(external,'utf8'),'preserve');assert.equal(readFileSync(join(f.home,'pi/settings.json'),'utf8'),beforeHome);
+  unlinkSync(external);
+  const restored=await runPackageCommand({home:f.home,cwd:f.cwd,command:'remove',source:'npm:absent',local:true});
+  assert.equal(restored.exitCode,0,JSON.stringify(restored));assert.equal(readFileSync(join(f.home,'pi/settings.json'),'utf8'),beforeHome);assert.equal(readFileSync(join(f.cwd,'.pi/settings.json'),'utf8'),beforeProject);assert.equal(existsSync(journal),false);
+  assert.equal((await run('remove',true)).exitCode,0);assert.equal((await run('remove')).exitCode,0);
+  assert.equal(git(source,'rev-parse','HEAD').trim(),nextCommit);
+});
+
+
+test("project autoload delta uses the user install with and without a redundant project tree", async t=>{
+  const {runPackageCommand,resolvePackageResources}=await load('src/packages.js');
+  const {packageRegistry}=await import('./helpers/package-registry.mjs');
+  const {rmSync}=await import('node:fs');
+  const f=await fixture(t);await packageRegistry(t);
+  const source='npm:@cothink-fixtures/mixed@1.0.0';
+  const run=local=>runPackageCommand({home:f.home,cwd:f.cwd,command:'install',source,local});
+  assert.equal((await run(false)).exitCode,0);
+  mkdirSync(join(f.cwd,'.pi'),{recursive:true});
+  writeFileSync(join(f.cwd,'.pi/settings.json'),JSON.stringify({packages:[{source,autoload:false,extensions:['-extensions/side-effect.js']}]}));
+  const result=await run(true);assert.equal(result.exitCode,0,JSON.stringify(result));
+  for(const withProjectTree of [true,false]) {
+    if(!withProjectTree)rmSync(join(f.cwd,'.pi/npm'),{recursive:true});
+    const snapshot=await resolvePackageResources({home:f.home,cwd:f.cwd});
+    const project=snapshot.packages.find(p=>p.scope==='project');
+    assert.equal(project.installedPath,realpathSync(join(f.home,'pi/npm/node_modules/@cothink-fixtures/mixed')));
+    assert.equal(snapshot.extensions.length,0);assert.equal(snapshot.skills.length,1);
+    assert.ok(snapshot.skills.every(path=>path.startsWith(realpathSync(join(f.home,'pi/npm')))));
+  }
 });

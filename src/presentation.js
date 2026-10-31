@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { readTask, readRequests } from "./task.js";
+import { readTask, readRequests, taskDisplayStatus } from "./task.js";
 import { finalAnswerText, safeText } from "./terminal.js";
 export function releaseNotes() {
   const { version } = JSON.parse(
@@ -35,7 +35,7 @@ export function workCheckText(check) {
   if (check.verification !== "passed") return "未验证（空检查策略）";
   return check.reusedFrom ? "通过（复用既有检查）" : "通过";
 }
-export function finalText(record, requests) {
+export function finalText(record, requests, {localArtifacts=true}={}) {
   if (record.status !== "completed") return "";
   const text = finalAnswerText(
     requests.find((c) => c.id === record.finalCallId)?.text ?? "",
@@ -43,12 +43,13 @@ export function finalText(record, requests) {
   if (!record.work) return text;
   return (
     text +
-    `\n\n宿主记录：正式版本 ${record.work.version}；检查${workCheckText(record.work.finalCheck)}。\n成果工作区：${record.work.resultWorkspace}\n集成引用：${record.work.integrationRef}（写回原分支须显式合并）。`
+    `\n\n宿主记录：正式版本 ${record.work.version}；检查${workCheckText(record.work.finalCheck)}。\n成果工作区：${record.work.resultWorkspace}${localArtifacts && record.work.visualEvidence?.length ? "\n视觉证据："+record.work.visualEvidence.flatMap(e=>e.images.map(i=>`[PNG](${i.path})`)).join(" · ") : ""}\n集成引用：${record.work.integrationRef}（写回原分支须显式合并）。`
   );
 }
 export function detailsText(record, requests) {
   return [
-    `任务 ${record.id ?? ""} · ${record.status}`,
+    ...(record.work?.helpers ?? []).map(h=>`助手 ${h.helperId} · 父 ${h.parentActorId} · ${h.model?.provider}/${h.model?.modelId} · ${h.status} · 停止${h.stoppedAt ? "已确认" : "未确认"}\n成果${h.treatment?.decision ?? "未处理"} · 导入${h.import?.receipt?.privateVersion ?? "无"} · 插件用量${JSON.stringify(h.usage??null)}\n${h.text??h.error?.message??""}`),
+    `任务 ${record.id ?? ""} · ${{cancelling:"正在停止",stop_unknown:"停止未确认"}[taskDisplayStatus(record)]??record.status}`,
     record.input ?? "",
     record.error ?? "",
     record.team ? `team：${record.team.name} · ${record.team.id}\n主模型：${record.team.main.provider}/${record.team.main.modelId}\n有序副模型：${record.team.secondary.map(m => `${m.provider}/${m.modelId}`).join("、")}（阵容不等于已调用）` : "当时未记录 team",
@@ -130,6 +131,7 @@ export function budgetText(config, singleModel = false, limits = {}) {
 export function taskJson(home, record) {
   return {
     task: record,
+    displayStatus: taskDisplayStatus(record),
     requests: readRequests(home, record),
     taskEnd: record.status,
   };
@@ -198,6 +200,8 @@ export async function inspectWork(
       ...new Set(
         [
           ...(record.work.requests ?? []).map((r) => r.requestId),
+          ...(record.work.helpers ?? []).map((h) => h.import?.requestId),
+          ...(record.tools??[]).filter(t=>t.kind==="native_plugin_result").map(t=>t.import?.requestId),
           ...(record.tools ?? [])
             .filter((t) => t.kernelInput)
             .map((t) => t.requestId),
