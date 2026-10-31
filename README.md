@@ -2,7 +2,7 @@
 
 CoThink 是一个多模型协作工具，旨在让不同模型组成团队，通过讨论、相互检查和分工协作，获得更好的回答与任务成果。
 
-GitHub 预览版 CoThink `0.8.9-native.1` 基于固定 Pi 1.4.0 开发，可复用 Pi 社区的技能（Skills）、提示模板、主题及下述已支持的插件入口。本版通过 [GitHub Releases](https://github.com/XSY-28/Cothink-release/releases/tag/v0.8.9-native.1) 提供安装包，尚未发布到 npm；具体范围见下方的[包管理说明](#安装和查看-pi-资源包)。
+GitHub 预览版 CoThink `0.8.9-native.1` 基于固定 Pi 1.4.0 开发，可复用 Pi 社区的技能（Skills）、提示模板、主题及下述已支持的插件入口。本版已发布到 npm 的 `latest`，同时通过 [GitHub Releases](https://github.com/XSY-28/Cothink-release/releases/tag/v0.8.9-native.1) 提供相同安装包；具体范围见下方的[包管理说明](#安装和查看-pi-资源包)。
 
 项目仍在早期预览阶段，支持 macOS 与 Windows（x64 / ARM64），可通过 npm 安装；Windows 也提供 ZIP 下载包。项目仍有一些 bug 和不完善之处。欢迎通过 [Issues](https://github.com/XSY-28/Cothink-release/issues) 反馈问题、分享使用体验或提出改进建议。
 
@@ -53,15 +53,16 @@ node ./gui-preview/node_modules/cothink-v2/bin/cothink.js gui --no-open
 
 ## 安装与启动
 
-GitHub 预览版为 [`0.8.9-native.1`](https://github.com/XSY-28/Cothink-release/releases/tag/v0.8.9-native.1)，尚未发布到 npm。下载该发行页的 `.tgz` 和 `SHA256SUMS`，核对摘要后安装（不要下载 GitHub 自动生成的 Source code 压缩包来代替安装包）：
+当前 npm `latest` 为 `0.8.9-native.1`。安装或更新：
 
 ```sh
-curl -fL -o cothink-v2-0.8.9-native.1.tgz https://github.com/XSY-28/Cothink-release/releases/download/v0.8.9-native.1/cothink-v2-0.8.9-native.1.tgz
-npm install -g ./cothink-v2-0.8.9-native.1.tgz
+npm install -g cothink-v2@latest
 cothink --version
 ```
 
-Windows PowerShell 使用 `npm.cmd` 和 `cothink.cmd`；本轮未提供新的 Windows ZIP，旧 ZIP 保留在历史发行页。原配置、Team、认证和历史继续保留；退出旧进程后重新启动。下方 `npm ...@latest` 安装的是 npm 渠道版本，不等于本 GitHub 预览版。
+也可指定 `npm install -g cothink-v2@0.8.9-native.1`。相同的 `.tgz` 与 `SHA256SUMS` 保留在 [GitHub 发行页](https://github.com/XSY-28/Cothink-release/releases/tag/v0.8.9-native.1)，下载后可用 `npm install -g ./cothink-v2-0.8.9-native.1.tgz` 安装。不要用 GitHub 自动生成的 Source code 压缩包代替安装包。
+
+Windows PowerShell 使用 `npm.cmd` 和 `cothink.cmd`；本轮未提供新的 Windows ZIP，旧 ZIP 保留在历史发行页。原配置、Team、认证和历史继续保留；退出旧进程后重新启动。
 
 需要 Node.js ≥22.19、npm 和 Git；项目代码搜索还需要 ripgrep（`rg`）。
 

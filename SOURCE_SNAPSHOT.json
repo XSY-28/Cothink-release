@@ -11,7 +11,7 @@
     "README.md"
   ],
   "runtimeAndDependenciesUnchanged": true,
-  "publication": "GitHub prerelease only; no npm publication",
+  "publication": "GitHub prerelease and npm latest; identical archive",
   "validation": {
     "reusedInstalledWorkflowAndRecursiveBackground": 2,
     "reusedInstalledRemoteCases": 4,
@@ -19,5 +19,12 @@
     "paidProviders": false,
     "externalMachines": false,
     "windowsDevice": false
-  }
+  },
+  "npmDistribution": {
+    "version": "0.8.9-native.1",
+    "tag": "latest",
+    "sha256": "9d1ec5eda7f5d6d99e6d19600044a8067a36379735506370cffb8e7b86d4e5a2",
+    "sameArchiveAsGitHub": true
+  },
+  "initialPublication": "GitHub prerelease only; no npm publication"
 }

@@ -6,7 +6,9 @@
 
 独立审查已关闭启动清理 P2：源与实际 bundle 均先保留受管 stop，再进行易失败的启动确认。启动／部分构造异常由真实工厂与 admission 函数加边界 doubles 检查；实际远端取消证据覆盖激活后流式请求，二者不混称。此前源回归、失败与来源哈希保留在 work/native-plugin-routes 各报告；本轮安装候选关键复验和精确产物身份见本地 delivery-report.md。
 
-未验证或不支持：远端 GUI／后台完整组合（async:true 拒绝）、外部机器／远端 Docker daemon、任意其他插件、未知后台任务重启接管、多子 attached-chain resume、付费模型质量／账单、Windows 实机与物理键盘。可信插件不是 OS 沙箱；未知停止／费用仍未知。本轮 GitHub 发行只更新说明并分发既有已验证运行代码，未发布到 npm；不修改 agent-sync 内核。此前本地候选的无全局切换／无发布记录属于历史检查点。
+未验证或不支持：远端 GUI／后台完整组合（async:true 拒绝）、外部机器／远端 Docker daemon、任意其他插件、未知后台任务重启接管、多子 attached-chain resume、付费模型质量／账单、Windows 实机与物理键盘。可信插件不是 OS 沙箱；未知停止／费用仍未知。本轮发行只更新说明并分发既有已验证运行代码；同一安装包已发布至 npm latest，注册表 integrity/shasum 与 GitHub 产物一致；不修改 agent-sync 内核。此前本地候选的无全局切换／无发布记录属于历史检查点。
+
+npm 发行后另从官方注册表全新安装：15,182 个常规文件与 GitHub 安装包逐字节一致，`--version` 返回 `0.8.9-native.1`，隔离数据根的 `list --json` 正常。注册表 latest、integrity 与 shasum 均核对一致；这些零模型发行检查不增加真实模型质量或外部机器验收结论。安装包本身保持 GitHub 已校验字节，包内说明保留打包时状态，最新发布状态以本仓库 README 为准。
 
 # 以下为历史检查点（保留原始范围与失败）
 
