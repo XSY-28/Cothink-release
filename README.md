@@ -1,12 +1,14 @@
 # CoThink
 
-CoThink 是一个多模型协作工具，旨在让不同模型组成团队，通过讨论、相互检查和分工协作，获得更好的回答与任务成果。
+在终端运行 `ct` 后，可以按 Option+M（Alt+M）切换三种模式。
 
-GitHub 预览版 CoThink `0.8.9-native.1` 基于固定 Pi 1.4.0 开发，可复用 Pi 社区的技能（Skills）、提示模板、主题及下述已支持的插件入口。本版已发布到 npm 的 `latest`，同时通过 [GitHub Releases](https://github.com/XSY-28/Cothink-release/releases/tag/v0.8.9-native.1) 提供相同安装包；具体范围见下方的[包管理说明](#安装和查看-pi-资源包)。
+- **ONE**（`/one`）用一个主模型回答问题或动手改代码。问个小问题，用这个就够了。
+- **CoThink**（`/cothink`，默认）问问题时，主模型先答，另一个模型帮你挑错，主模型再根据意见修改。做任务时也可以分工。
+- **PROJECT**（`/project`）适合分几步做的事。在 Git 项目里说出目标，先看计划，确认后输入“开始”。中途可以暂停，下次接着做。
 
-项目仍在早期预览阶段，支持 macOS 与 Windows（x64 / ARM64），可通过 npm 安装；Windows 也提供 ZIP 下载包。项目仍有一些 bug 和不完善之处。欢迎通过 [Issues](https://github.com/XSY-28/Cothink-release/issues) 反馈问题、分享使用体验或提出改进建议。
+安装和更新用 `npm install -g cothink-v2@latest`。目前是预览版，支持 macOS 和 Windows。安装包见 [GitHub Releases](https://github.com/XSY-28/Cothink-release/releases/tag/v0.8.13-project.2)，遇到问题可以提 [Issue](https://github.com/XSY-28/Cothink-release/issues)。
 
-## 本版新增（0.8.9-native.1）
+## 0.8.9-native.1 的插件更新
 
 - 接入 Pi 插件的工具、命令、事件与技能，安装后可在已支持的 CLI 路径中实际使用。
 - 包管理支持 npm、Pi 支持的 Git 来源、本地文件／目录，以及个人／项目作用域；多个 Team 共享所选资源。
@@ -53,14 +55,14 @@ node ./gui-preview/node_modules/cothink-v2/bin/cothink.js gui --no-open
 
 ## 安装与启动
 
-当前 npm `latest` 为 `0.8.9-native.1`。安装或更新：
+安装或更新到 npm 的当前版本：
 
 ```sh
 npm install -g cothink-v2@latest
 cothink --version
 ```
 
-也可指定 `npm install -g cothink-v2@0.8.9-native.1`。相同的 `.tgz` 与 `SHA256SUMS` 保留在 [GitHub 发行页](https://github.com/XSY-28/Cothink-release/releases/tag/v0.8.9-native.1)，下载后可用 `npm install -g ./cothink-v2-0.8.9-native.1.tgz` 安装。不要用 GitHub 自动生成的 Source code 压缩包代替安装包。
+也可指定 `npm install -g cothink-v2@0.8.13-project.2`。相同的 `.tgz` 与 `SHA256SUMS` 保留在 [GitHub 发行页](https://github.com/XSY-28/Cothink-release/releases/tag/v0.8.13-project.2)，下载后可用 `npm install -g ./cothink-v2-0.8.13-project.2.tgz` 安装。不要用 GitHub 自动生成的 Source code 压缩包代替安装包。
 
 Windows PowerShell 使用 `npm.cmd` 和 `cothink.cmd`；本轮未提供新的 Windows ZIP，旧 ZIP 保留在历史发行页。原配置、Team、认证和历史继续保留；退出旧进程后重新启动。
 
