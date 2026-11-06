@@ -4,7 +4,7 @@
 
 - **ONE**（`/one`）用一个主模型回答问题或动手改代码。问个小问题，用这个就够了。
 - **CoThink**（`/cothink`，默认）问问题时，主模型先答，另一个模型帮你挑错，主模型再根据意见修改。做任务时也可以分工。
-- **PROJECT**（`/project`）主模型担任总负责人，可以把子任务交给其他模型带队完成。成员各自写草稿，子负责人可以退回草稿让成员修改，最后由总负责人审阅，决定哪些改动并入项目。分工、进度和已接纳的版本都会随项目保存。
+- **PROJECT**（`/project`）主模型把任务交给子负责人，子负责人可以再分给组员。同一个模型可以担任不同岗位。
 
 安装和更新用 `npm install -g cothink-v2@latest`。目前是预览版，支持 macOS 和 Windows。安装包见 [GitHub Releases](https://github.com/XSY-28/Cothink-release/releases/tag/v0.8.13-project.2)，遇到问题可以提 [Issue](https://github.com/XSY-28/Cothink-release/issues)。
 
